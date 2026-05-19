@@ -211,26 +211,44 @@ html, body {
 }
 
 /* 扫描页面样式 */
+#scanner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: #000;
+}
+
+#scanner.active {
+    display: block;
+}
 .scanner-header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
     display: flex;
     justify-content: space-between;
     align-items: center;
     padding: 20px;
     background: rgba(0, 0, 0, 0.7);
+    z-index: 100;
 }
 
 .back-btn, .flash-btn {
-    width: 40px;
-    height: 40px;
+    width: 44px;
+    height: 44px;
     border: none;
     border-radius: 50%;
-    background: rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.25);
     color: #fff;
-    font-size: 18px;
+    font-size: 20px;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
+    touch-action: manipulation;
 }
 
 .flash-btn.active {
@@ -244,9 +262,13 @@ html, body {
 }
 
 .video-container {
-    flex: 1;
-    position: relative;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 120px;
     background: #000;
+    z-index: 1;
 }
 
 #video {
@@ -317,36 +339,44 @@ html, body {
 }
 
 .scanner-actions {
-    padding: 30px 20px;
-    background: rgba(0, 0, 0, 0.7);
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 25px 20px;
+    padding-bottom: max(25px, env(safe-area-inset-bottom));
+    background: rgba(0, 0, 0, 0.85);
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 15px;
+    z-index: 100;
 }
 
 .capture-btn {
-    width: 72px;
-    height: 72px;
-    border: none;
+    width: 80px;
+    height: 80px;
+    border: 4px solid #fff;
+    border-radius: 50%;
     background: transparent;
     cursor: pointer;
     position: relative;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.capture-btn:active {
+    background: rgba(255, 255, 255, 0.3);
 }
 
 .capture-ring {
-    position: absolute;
-    width: 72px;
-    height: 72px;
-    border: 3px solid #fff;
-    border-radius: 50%;
-    display: block;
+    display: none;
 }
 
 .capture-dot {
     position: absolute;
-    width: 56px;
-    height: 56px;
+    width: 60px;
+    height: 60px;
     background: #fff;
     border-radius: 50%;
     top: 50%;
@@ -356,12 +386,13 @@ html, body {
 }
 
 .capture-btn:active .capture-dot {
-    transform: translate(-50%, -50%) scale(0.95);
+    transform: translate(-50%, -50%) scale(0.9);
 }
 
 .capture-hint {
-    color: rgba(255, 255, 255, 0.8);
-    font-size: 14px;
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 15px;
+    font-weight: 500;
 }
 
 /* 预览页面样式 */
