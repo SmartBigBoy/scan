@@ -1,14 +1,22 @@
 // 全局变量
 let video = null;
 let canvas = null;
-let currentImage = null;          // 当前显示的图片
-let originalImageData = null;     // 原始拍摄/选择的图片
-let scanResultData = null;        // OpenCV透视校正后的彩色图 (未检测到时为null)
+let currentImage = null;
+let originalImageData = null;
+let scanResultData = null;
 let capturedImages = [];
 let flashEnabled = false;
 let rotation = 0;
 let currentFilter = 'original';
 let selectedPageIndex = -1;
+
+// 实时检测变量
+let detectLoopId = null;
+let lockedCorners = null;
+let detectHistory = [];
+let detectStableCount = 0;
+let isDetecting = false;
+let detectFrameCount = 0;
 
 // 裁剪相关变量
 let crop4Corners = [];
@@ -94,7 +102,155 @@ function showShareModal(show) {
     elements.shareModal.classList.toggle('show', show);
 }
 
-// 初始化摄像头
+// ========== 实时文档检测引擎 ==========
+
+function startDetection() {
+    stopDetection();
+    lockedCorners = null;
+    detectHistory = [];
+    detectStableCount = 0;
+    const overlay = document.getElementById('detectOverlay');
+    const container = document.getElementById('videoContainer');
+    overlay.width = container.clientWidth;
+    overlay.height = container.clientHeight;
+    scheduleDetect();
+}
+
+function stopDetection() {
+    if (detectLoopId) { cancelAnimationFrame(detectLoopId); detectLoopId = null; }
+    isDetecting = false;
+    clearOverlay();
+}
+
+function scheduleDetect() {
+    if (!video || !video.videoWidth) { detectLoopId = requestAnimationFrame(scheduleDetect); return; }
+    detectLoopId = requestAnimationFrame(() => runDetection());
+}
+
+function clearOverlay() {
+    const overlay = document.getElementById('detectOverlay');
+    const ctx = overlay.getContext('2d');
+    ctx.clearRect(0, 0, overlay.width, overlay.height);
+}
+
+function setDetectStatus(text, isLocked) {
+    const el = document.getElementById('detectStatus');
+    if (!el) return;
+    el.textContent = text;
+    el.className = 'detect-status' + (isLocked ? ' locked' : '');
+}
+
+async function runDetection() {
+    if (!video || !video.videoWidth || !openCvReady) {
+        detectLoopId = requestAnimationFrame(() => runDetection());
+        return;
+    }
+    if (isDetecting) {
+        detectLoopId = requestAnimationFrame(() => runDetection());
+        return;
+    }
+    isDetecting = true;
+    detectFrameCount++;
+
+    const vw = video.videoWidth, vh = video.videoHeight;
+    const overlay = document.getElementById('detectOverlay');
+    const container = document.getElementById('videoContainer');
+
+    const cw = container.clientWidth, ch = container.clientHeight;
+    if (overlay.width !== cw || overlay.height !== ch) {
+        overlay.width = cw; overlay.height = ch;
+    }
+
+    const snapCanvas = document.createElement('canvas');
+    const shrink = 4;
+    snapCanvas.width = vw / shrink;
+    snapCanvas.height = vh / shrink;
+    const snapCtx = snapCanvas.getContext('2d');
+    snapCtx.drawImage(video, 0, 0, snapCanvas.width, snapCanvas.height);
+
+    try {
+        const src = cv.matFromImageData(snapCtx.getImageData(0, 0, snapCanvas.width, snapCanvas.height));
+        const rawCorners = detectCorners(src);
+        src.delete();
+
+        if (rawCorners) {
+            const scaleX = cw / snapCanvas.width;
+            const scaleY = ch / snapCanvas.height;
+            const scaled = rawCorners.map(c => ({ x: c.x * scaleX, y: c.y * scaleY }));
+            const native = rawCorners.map(c => ({ x: c.x * shrink, y: c.y * shrink }));
+
+            let stable = false;
+            detectHistory.push(native);
+            if (detectHistory.length > 5) detectHistory.shift();
+
+            if (detectHistory.length >= 3) {
+                const last = detectHistory[detectHistory.length - 1];
+                const prev = detectHistory[detectHistory.length - 2];
+                let drift = 0;
+                for (let i = 0; i < 4; i++) drift += distance(last[i], prev[i]);
+                if (drift < 15) detectStableCount++;
+                else detectStableCount = 0;
+            }
+
+            if (detectStableCount >= 3 && !lockedCorners) {
+                lockedCorners = native;
+                setDetectStatus('已锁定 ✓', true);
+            } else if (!lockedCorners) {
+                setDetectStatus('检测到文档', false);
+            }
+
+            drawDetectOverlay(scaled, !!lockedCorners);
+        } else {
+            detectHistory = [];
+            detectStableCount = 0;
+            if (!lockedCorners) {
+                clearOverlay();
+                setDetectStatus('对准文档', false);
+            }
+        }
+    } catch (e) {
+        console.warn('检测帧失败:', e);
+    }
+
+    snapCanvas.remove();
+    isDetecting = false;
+    const interval = lockedCorners ? 600 : 350;
+    detectLoopId = setTimeout(() => { detectLoopId = requestAnimationFrame(() => runDetection()); }, interval);
+}
+
+function drawDetectOverlay(corners, locked) {
+    const overlay = document.getElementById('detectOverlay');
+    const ctx = overlay.getContext('2d');
+    ctx.clearRect(0, 0, overlay.width, overlay.height);
+
+    const color = locked ? '#4CAF50' : '#FFC107';
+    const lw = locked ? 3 : 2;
+
+    ctx.beginPath();
+    ctx.moveTo(corners[0].x, corners[0].y);
+    for (let i = 1; i < 4; i++) ctx.lineTo(corners[i].x, corners[i].y);
+    ctx.closePath();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = lw;
+    ctx.setLineDash(locked ? [] : [6, 4]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = locked ? 'rgba(76,175,80,0.08)' : 'rgba(255,193,7,0.05)';
+    ctx.fill();
+
+    for (const c of corners) {
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, locked ? 8 : 6, 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.fill();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+    }
+}
+
+// ========== 初始化摄像头 ==========
 async function initCamera() {
     try {
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -113,6 +269,7 @@ async function initCamera() {
         video.onloadedmetadata = () => {
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
+            startDetection();
         };
     } catch (err) {
         console.error('无法访问摄像头:', err);
@@ -121,11 +278,13 @@ async function initCamera() {
     }
 }
 
-// 拍照
+// ========== 拍照 ==========
+
 async function capturePhoto() {
     if (!video || !canvas) return;
     showLoading(true);
     rotation = 0;
+    stopDetection();
 
     const ctx = canvas.getContext('2d');
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -134,13 +293,18 @@ async function capturePhoto() {
 
     try {
         if (openCvReady) {
-            const warped = await warpDocument(originalImageData);
-            if (warped) scanResultData = warped;
+            if (lockedCorners) {
+                scanResultData = await warpWithDetectedCorners(originalImageData, lockedCorners);
+            } else {
+                const warped = await warpDocument(originalImageData);
+                if (warped) scanResultData = warped;
+            }
         }
     } catch (e) {
         console.warn('透视校正失败:', e);
     }
 
+    lockedCorners = null;
     applyFilter('original');
     showLoading(false);
     showPage('preview');
@@ -465,6 +629,7 @@ function toggleFlash() {
 
 // 返回首页并清空数据
 function goHome() {
+    stopDetection();
     capturedImages = [];
     scanResultData = null;
     originalImageData = null;
@@ -489,7 +654,7 @@ function setupEventListeners() {
     buttons.flash.addEventListener('click', toggleFlash);
     buttons.capture.addEventListener('click', capturePhoto);
     
-    buttons.previewBack.addEventListener('click', () => showPage('scanner'));
+    buttons.previewBack.addEventListener('click', () => { showPage('scanner'); if (video) startDetection(); });
     buttons.confirm.addEventListener('click', confirmImage);
     buttons.rotate.addEventListener('click', rotateImage);
     buttons.crop.addEventListener('click', openCropper);
@@ -872,15 +1037,18 @@ async function rescanCurrentPage() {
     rescanMode = true;
     showPage('scanner');
     if (!video) initCamera();
+    else startDetection();
 }
 
 // "继续扫描"添加时，如果是替换模式则替换选中页
 let rescanMode = false;
 
 function continueScanning() {
+    stopDetection();
     rescanMode = false;
     showPage('scanner');
     if (!video) initCamera();
+    else startDetection();
 }
 
 // ========== 添加到桌面功能 ==========

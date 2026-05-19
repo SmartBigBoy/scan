@@ -311,80 +311,47 @@ html, body {
 }
 
 .video-container {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 120px;
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
     background: #000;
-    z-index: 1;
 }
 
 #video {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
 }
 
-.scan-guides {
+#detectOverlay {
     position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 240px;
-    height: 320px;
-    pointer-events: none;
-}
-
-.guide-corner {
-    position: absolute;
-    width: 30px;
-    height: 30px;
-    border: 3px solid #4CAF50;
-    opacity: 0.9;
-}
-
-.guide-corner.tl {
     top: 0;
     left: 0;
-    border-right: none;
-    border-bottom: none;
-}
-
-.guide-corner.tr {
-    top: 0;
-    right: 0;
-    border-left: none;
-    border-bottom: none;
-}
-
-.guide-corner.bl {
-    bottom: 0;
-    left: 0;
-    border-right: none;
-    border-top: none;
-}
-
-.guide-corner.br {
-    bottom: 0;
-    right: 0;
-    border-left: none;
-    border-top: none;
-}
-
-.guide-line {
-    position: absolute;
     width: 100%;
-    height: 2px;
-    background: #4CAF50;
-    top: 0;
-    animation: scanLine 2s linear infinite;
-    opacity: 0.8;
+    height: 100%;
+    pointer-events: none;
+    z-index: 5;
 }
 
-@keyframes scanLine {
-    0% { top: 0; }
-    100% { top: 100%; }
+.detect-status {
+    position: absolute;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.6);
+    color: #FFC107;
+    padding: 8px 20px;
+    border-radius: 20px;
+    font-size: 14px;
+    z-index: 10;
+    backdrop-filter: blur(4px);
+    transition: all 0.3s ease;
+}
+
+.detect-status.locked {
+    background: rgba(76,175,80,0.8);
+    color: #fff;
 }
 
 .scanner-actions {

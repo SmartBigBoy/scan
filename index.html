@@ -74,16 +74,11 @@
             <button class="flash-btn" id="flashBtn">⚡</button>
         </div>
         
-        <div class="video-container">
+        <div class="video-container" id="videoContainer">
             <video id="video" autoplay playsinline></video>
+            <canvas id="detectOverlay"></canvas>
             <canvas id="canvas" style="display: none;"></canvas>
-            <div class="scan-guides">
-                <div class="guide-corner tl"></div>
-                <div class="guide-corner tr"></div>
-                <div class="guide-corner bl"></div>
-                <div class="guide-corner br"></div>
-                <div class="guide-line"></div>
-            </div>
+            <div class="detect-status" id="detectStatus">对准文档</div>
         </div>
         
         <div class="scanner-actions">
