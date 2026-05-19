@@ -2,9 +2,12 @@
 let video = null;
 let canvas = null;
 let currentImage = null;
+let originalImageData = null;
 let capturedImages = [];
 let flashEnabled = false;
 let rotation = 0;
+let currentFilter = 'auto';
+let selectedPageIndex = -1;
 
 // 裁剪相关变量
 let cropArea = null;
@@ -34,11 +37,9 @@ const buttons = {
     previewBack: document.getElementById('previewBackBtn'),
     confirm: document.getElementById('confirmBtn'),
     rotate: document.getElementById('rotateBtn'),
-    enhance: document.getElementById('enhanceBtn'),
     crop: document.getElementById('cropBtn'),
     deleteBtn: document.getElementById('deleteBtn'),
     resultBack: document.getElementById('resultBackBtn'),
-    savePdf: document.getElementById('savePdfBtn'),
     share: document.getElementById('shareBtn'),
     continue: document.getElementById('continueBtn'),
     shareClose: document.getElementById('shareClose'),
@@ -51,9 +52,12 @@ const buttons = {
     cropReset: document.getElementById('cropResetBtn'),
     cropRotate: document.getElementById('cropRotateBtn'),
     cropFlipH: document.getElementById('cropFlipHBtn'),
-    cropFlipV: document.getElementById('cropFlipVBtn'),
     addToHome: document.getElementById('addToHomeBtn'),
-    addToHomeClose: document.getElementById('addToHomeClose')
+    addToHomeClose: document.getElementById('addToHomeClose'),
+    moreBtn: document.getElementById('moreBtn'),
+    downloadPdf: document.getElementById('downloadPdfBtn'),
+    downloadPng: document.getElementById('downloadPngBtn'),
+    downloadJpg: document.getElementById('downloadJpgBtn')
 };
 
 const elements = {
@@ -67,7 +71,17 @@ const elements = {
     cropperContainer: document.getElementById('cropperContainer'),
     cropArea: document.getElementById('cropArea'),
     cropOverlay: document.getElementById('cropOverlay'),
-    addToHomeModal: document.getElementById('addToHomeModal')
+    addToHomeModal: document.getElementById('addToHomeModal'),
+    filterBar: document.getElementById('filterBar'),
+    adjustBar: document.getElementById('adjustBar'),
+    brightnessSlider: document.getElementById('brightnessSlider'),
+    contrastSlider: document.getElementById('contrastSlider'),
+    brightnessValue: document.getElementById('brightnessValue'),
+    contrastValue: document.getElementById('contrastValue'),
+    pageSettings: document.getElementById('pageSettings'),
+    pageOrientation: document.getElementById('pageOrientation'),
+    pageNumberToggle: document.getElementById('pageNumberToggle'),
+    pageMargin: document.getElementById('pageMargin')
 };
 
 // 页面切换
@@ -114,43 +128,101 @@ async function initCamera() {
 }
 
 // 拍照
-function capturePhoto() {
+async function capturePhoto() {
     if (!video || !canvas) return;
+    
+    showLoading(true);
     
     const ctx = canvas.getContext('2d');
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const rawData = canvas.toDataURL('image/jpeg', 0.9);
     
-    // 获取图像数据并进行文档增强
-    enhanceImage();
-}
-
-// 图像增强处理
-function enhanceImage() {
-    const ctx = canvas.getContext('2d');
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const data = imageData.data;
-    
-    // 简单的文档增强算法
-    for (let i = 0; i < data.length; i += 4) {
-        // 计算灰度值
-        const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
-        
-        // 二值化处理（增强对比度）
-        const threshold = 180;
-        const newValue = gray > threshold ? 255 : gray * 0.8;
-        
-        data[i] = newValue;     // R
-        data[i + 1] = newValue; // G
-        data[i + 2] = newValue; // B
+    try {
+        if (openCvReady) {
+            originalImageData = await scanDocument(rawData);
+        } else {
+            originalImageData = rawData;
+        }
+    } catch (e) {
+        console.warn('OpenCV扫描失败，使用原图:', e);
+        originalImageData = rawData;
     }
     
-    ctx.putImageData(imageData, 0, 0);
-    currentImage = canvas.toDataURL('image/jpeg', 0.9);
-    
-    // 显示预览
+    currentImage = originalImageData;
     elements.previewImage.src = currentImage;
-    rotation = 0;
+    elements.filterBar.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    document.querySelector('.filter-btn[data-filter="original"]').classList.add('active');
+    showLoading(false);
     showPage('preview');
+}
+
+function applyFilter(type) {
+    if (!originalImageData) return;
+    currentFilter = type;
+    
+    const img = new Image();
+    img.onload = () => {
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = img.width;
+        tempCanvas.height = img.height;
+        const ctx = tempCanvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        const imageData = ctx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+        const data = imageData.data;
+
+        if (type !== 'original') {
+            for (let i = 0; i < data.length; i += 4) {
+                const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+                let r, g, b;
+                
+                if (type === 'auto') {
+                    const threshold = 160;
+                    const v = gray > threshold ? 255 : gray * 0.85;
+                    r = g = b = v;
+                } else if (type === 'document') {
+                    const threshold = 140;
+                    r = g = b = gray > threshold ? 255 : (gray < 80 ? 0 : gray);
+                } else if (type === 'idcard') {
+                    const factor = 1.15;
+                    r = Math.min(255, data[i] * factor);
+                    g = Math.min(255, data[i + 1] * factor);
+                    b = Math.min(255, data[i + 2] * factor);
+                }
+                
+                data[i] = r;
+                data[i + 1] = g;
+                data[i + 2] = b;
+            }
+        }
+
+        ctx.putImageData(imageData, 0, 0);
+        currentImage = tempCanvas.toDataURL('image/jpeg', 0.9);
+        elements.previewImage.src = currentImage;
+        rotation = 0;
+        applyAdjustments();
+    };
+    img.src = originalImageData;
+}
+
+function applyAdjustments() {
+    if (!currentImage) return;
+    const brightness = parseInt(elements.brightnessSlider.value);
+    const contrast = parseInt(elements.contrastSlider.value);
+    if (brightness === 0 && contrast === 0) {
+        elements.previewImage.style.filter = 'none';
+        return;
+    }
+    const b = 1 + brightness / 100;
+    const c = 1 + contrast / 100;
+    elements.previewImage.style.filter = `brightness(${b}) contrast(${c})`;
+}
+
+function resetAdjustments() {
+    elements.brightnessSlider.value = 0;
+    elements.contrastSlider.value = 0;
+    elements.brightnessValue.textContent = '0';
+    elements.contrastValue.textContent = '0';
+    elements.previewImage.style.filter = 'none';
 }
 
 // 旋转图像
@@ -160,59 +232,73 @@ function rotateImage() {
     elements.previewImage.style.transform = `rotate(${rotation}deg)`;
 }
 
-// 保存当前图像到列表
 function confirmImage() {
-    // 创建旋转后的图像
     const tempCanvas = document.createElement('canvas');
     const tempCtx = tempCanvas.getContext('2d');
     
-    // 根据旋转角度调整canvas尺寸
-    if (rotation === 90 || rotation === 270) {
-        tempCanvas.width = canvas.height;
-        tempCanvas.height = canvas.width;
-    } else {
-        tempCanvas.width = canvas.width;
-        tempCanvas.height = canvas.height;
-    }
-    
-    // 绘制旋转后的图像
-    tempCtx.save();
-    tempCtx.translate(tempCanvas.width / 2, tempCanvas.height / 2);
-    tempCtx.rotate((rotation * Math.PI) / 180);
     const img = new Image();
     img.onload = () => {
+        const bw = rotation === 90 || rotation === 270 ? img.height : img.width;
+        const bh = rotation === 90 || rotation === 270 ? img.width : img.height;
+        tempCanvas.width = bw;
+        tempCanvas.height = bh;
+        
+        tempCtx.save();
+        tempCtx.translate(bw / 2, bh / 2);
+        tempCtx.rotate((rotation * Math.PI) / 180);
+
+        const b = parseInt(elements.brightnessSlider.value);
+        const c = parseInt(elements.contrastSlider.value);
+        if (b !== 0 || c !== 0) {
+            tempCtx.filter = `brightness(${1 + b / 100}) contrast(${1 + c / 100})`;
+        }
+
         tempCtx.drawImage(img, -img.width / 2, -img.height / 2);
-        const rotatedDataUrl = tempCanvas.toDataURL('image/jpeg', 0.9);
-        capturedImages.push(rotatedDataUrl);
+        tempCtx.restore();
+        
+        const dataUrl = tempCanvas.toDataURL('image/jpeg', 0.9);
+        capturedImages.push(dataUrl);
+        resetAdjustments();
         updateDocumentList();
         showPage('result');
     };
     img.src = currentImage;
 }
 
-// 更新文档列表
 function updateDocumentList() {
     elements.documentList.innerHTML = '';
     
     capturedImages.forEach((image, index) => {
         const item = document.createElement('div');
-        item.className = 'document-item';
+        item.className = 'document-item' + (index === selectedPageIndex ? ' selected' : '');
         item.innerHTML = `
             <img src="${image}" alt="文档 ${index + 1}">
             <span class="page-number">${index + 1}</span>
+            <button class="doc-delete-btn" data-index="${index}">×</button>
         `;
+        item.addEventListener('click', (e) => {
+            if (e.target.classList.contains('doc-delete-btn')) return;
+            selectedPageIndex = index;
+            updateDocumentList();
+        });
         elements.documentList.appendChild(item);
+    });
+
+    document.querySelectorAll('.doc-delete-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const idx = parseInt(btn.dataset.index);
+            capturedImages.splice(idx, 1);
+            if (selectedPageIndex >= capturedImages.length) selectedPageIndex = -1;
+            updateDocumentList();
+        });
     });
 }
 
-// 删除当前图像
 function deleteCurrentImage() {
-    if (confirm('确定要删除这张图片吗？')) {
-        showPage('scanner');
-    }
+    showPage('scanner');
 }
 
-// 生成PDF
 async function generatePDF() {
     if (capturedImages.length === 0) {
         alert('请先扫描文档');
@@ -223,29 +309,28 @@ async function generatePDF() {
     
     try {
         const { jsPDF } = window.jspdf;
-        const pdf = new jsPDF({
-            orientation: capturedImages.length > 1 ? 'portrait' : 'auto',
-            unit: 'px',
-            format: [640, 960]
-        });
+        const margin = parseInt(elements.pageMargin.value);
+        const orientation = elements.pageOrientation.value;
+        const showNumbers = elements.pageNumberToggle.checked;
+        const pw = orientation === 'portrait' ? 595 : 842;
+        const ph = orientation === 'portrait' ? 842 : 595;
         
-        // 添加水印
-        pdf.setFontSize(10);
-        pdf.setTextColor(150, 150, 150);
+        const pdf = new jsPDF({ orientation: orientation, unit: 'pt', format: 'a4' });
         
-        capturedImages.forEach((image, index) => {
-            if (index > 0) {
-                pdf.addPage();
+        for (let i = 0; i < capturedImages.length; i++) {
+            if (i > 0) pdf.addPage();
+            
+            const imgW = pw - margin * 2;
+            const imgH = ph - margin * 2 - (showNumbers ? 20 : 0);
+            pdf.addImage(capturedImages[i], 'JPEG', margin, margin, imgW, imgH);
+            
+            if (showNumbers) {
+                pdf.setFontSize(9);
+                pdf.setTextColor(120, 120, 120);
+                pdf.text(`${i + 1} / ${capturedImages.length}`, pw / 2, ph - 8, { align: 'center' });
             }
-            
-            // 添加图像
-            pdf.addImage(image, 'JPEG', 0, 0, 640, 960);
-            
-            // 添加页码
-            pdf.text(`第 ${index + 1} 页 / 共 ${capturedImages.length} 页`, 10, 950);
-        });
+        }
         
-        // 保存PDF
         const fileName = `扫描文档_${new Date().toLocaleDateString('zh-CN').replace(/\//g, '-')}.pdf`;
         pdf.save(fileName);
     } catch (err) {
@@ -254,6 +339,34 @@ async function generatePDF() {
     } finally {
         showLoading(false);
     }
+}
+
+function downloadAsPng() {
+    if (capturedImages.length === 0) { alert('请先扫描文档'); return; }
+    showLoading(true);
+    if (capturedImages.length === 1) {
+        const a = document.createElement('a');
+        a.href = capturedImages[0];
+        a.download = `扫描_${Date.now()}.png`;
+        a.click();
+    } else {
+        alert('多页文档建议使用 PDF 格式导出。\n可长按单张缩略图保存。');
+    }
+    showLoading(false);
+}
+
+function downloadAsJpg() {
+    if (capturedImages.length === 0) { alert('请先扫描文档'); return; }
+    showLoading(true);
+    if (capturedImages.length === 1) {
+        const a = document.createElement('a');
+        a.href = capturedImages[0];
+        a.download = `扫描_${Date.now()}.jpg`;
+        a.click();
+    } else {
+        alert('多页文档建议使用 PDF 格式导出。\n可长按单张缩略图保存。');
+    }
+    showLoading(false);
 }
 
 // 分享功能
@@ -311,16 +424,30 @@ function selectFromGallery() {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/*';
-    input.capture = 'environment';
     
-    input.onchange = (e) => {
+    input.onchange = async (e) => {
         const file = e.target.files[0];
         if (file) {
             const reader = new FileReader();
-            reader.onload = (event) => {
-                currentImage = event.target.result;
+            reader.onload = async (event) => {
+                showLoading(true);
+                const rawData = event.target.result;
+                try {
+                    if (openCvReady) {
+                        originalImageData = await scanDocument(rawData);
+                    } else {
+                        originalImageData = rawData;
+                    }
+                } catch (err) {
+                    console.warn('OpenCV扫描失败，使用原图:', err);
+                    originalImageData = rawData;
+                }
+                resetAdjustments();
+                currentImage = originalImageData;
                 elements.previewImage.src = currentImage;
-                rotation = 0;
+                elements.filterBar.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                document.querySelector('.filter-btn[data-filter="original"]').classList.add('active');
+                showLoading(false);
                 showPage('preview');
             };
             reader.readAsDataURL(file);
@@ -367,7 +494,6 @@ function goHome() {
 
 // 事件监听
 function setupEventListeners() {
-    // 首页按钮
     buttons.scan.addEventListener('click', () => {
         showPage('scanner');
         initCamera();
@@ -375,57 +501,67 @@ function setupEventListeners() {
     
     buttons.gallery.addEventListener('click', selectFromGallery);
     
-    // 扫描页面按钮
     buttons.back.addEventListener('click', goHome);
     buttons.flash.addEventListener('click', toggleFlash);
     buttons.capture.addEventListener('click', capturePhoto);
     
-    // 预览页面按钮
     buttons.previewBack.addEventListener('click', () => showPage('scanner'));
     buttons.confirm.addEventListener('click', confirmImage);
     buttons.rotate.addEventListener('click', rotateImage);
-    buttons.enhance.addEventListener('click', enhanceImage);
     buttons.crop.addEventListener('click', openCropper);
     buttons.deleteBtn.addEventListener('click', deleteCurrentImage);
     
-    // 裁剪页面按钮
     buttons.cropperBack.addEventListener('click', closeCropper);
     buttons.cropperConfirm.addEventListener('click', applyCrop);
     buttons.cropReset.addEventListener('click', resetCrop);
     buttons.cropRotate.addEventListener('click', rotateCropperImage);
     buttons.cropFlipH.addEventListener('click', flipCropperImageH);
-    buttons.cropFlipV.addEventListener('click', flipCropperImageV);
     
-    // 添加到桌面按钮
     buttons.addToHome.addEventListener('click', showAddToHomeModal);
     buttons.addToHomeClose.addEventListener('click', hideAddToHomeModal);
     
-    // 结果页面按钮
     buttons.resultBack.addEventListener('click', goHome);
-    buttons.savePdf.addEventListener('click', generatePDF);
     buttons.share.addEventListener('click', shareDocument);
     buttons.continue.addEventListener('click', continueScanning);
     
-    // 分享弹窗按钮
     buttons.shareClose.addEventListener('click', () => showShareModal(false));
     buttons.shareQQ.addEventListener('click', () => copyToClipboardAndShare('qq'));
     buttons.shareWechat.addEventListener('click', () => copyToClipboardAndShare('wechat'));
     buttons.shareWeibo.addEventListener('click', () => copyToClipboardAndShare('weibo'));
     buttons.shareOther.addEventListener('click', () => copyToClipboardAndShare('other'));
     
-    // 返回按钮事件委托
-    document.addEventListener('click', (e) => {
-        if (e.target.classList.contains('back-btn')) {
-            const currentPage = Object.keys(pages).find(key => pages[key].classList.contains('active'));
-            if (currentPage === 'preview') {
-                showPage('scanner');
-            } else if (currentPage === 'result') {
-                goHome();
-            }
-        }
-    });
+    buttons.downloadPdf.addEventListener('click', generatePDF);
+    buttons.downloadPng.addEventListener('click', downloadAsPng);
+    buttons.downloadJpg.addEventListener('click', downloadAsJpg);
     
-    // 裁剪区域事件
+    buttons.moreBtn.addEventListener('click', () => {
+        const settings = elements.pageSettings;
+        settings.style.display = settings.style.display === 'none' ? 'block' : 'none';
+    });
+
+    elements.brightnessSlider.addEventListener('input', () => {
+        elements.brightnessValue.textContent = elements.brightnessSlider.value;
+        applyAdjustments();
+    });
+    elements.contrastSlider.addEventListener('input', () => {
+        elements.contrastValue.textContent = elements.contrastSlider.value;
+        applyAdjustments();
+    });
+
+    elements.filterBar.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            elements.filterBar.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            applyFilter(btn.dataset.filter);
+        });
+    });
+
+    document.querySelectorAll('.preset-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            applySizePreset(btn.dataset.preset);
+        });
+    });
+
     setupCropperEvents();
 }
 
@@ -682,7 +818,6 @@ function rotateCropperImage() {
     image.style.transform = `rotate(${newRotation}deg)`;
 }
 
-// 水平翻转裁剪图片
 function flipCropperImageH() {
     const image = elements.cropperImage;
     const currentScaleX = parseFloat(image.dataset.scaleX || '1');
@@ -690,12 +825,32 @@ function flipCropperImageH() {
     image.style.transform = `scaleX(${image.dataset.scaleX})`;
 }
 
-// 垂直翻转裁剪图片
-function flipCropperImageV() {
+function applySizePreset(preset) {
+    const container = elements.cropperContainer;
     const image = elements.cropperImage;
-    const currentScaleY = parseFloat(image.dataset.scaleY || '1');
-    image.dataset.scaleY = -currentScaleY;
-    image.style.transform = `scaleY(${image.dataset.scaleY})`;
+    const imgW = parseFloat(image.style.width);
+    const imgH = parseFloat(image.style.height);
+    const imgLeft = parseFloat(image.style.left);
+    const imgTop = parseFloat(image.style.top);
+    const maxW = imgLeft + imgW;
+    const maxH = imgTop + imgH;
+
+    let ratio;
+    if (preset === 'a4') ratio = 210 / 297;
+    else if (preset === 'idcard') ratio = 85.6 / 54;
+    else if (preset === 'receipt') ratio = 80 / 200;
+
+    const areaHeight = imgH * 0.7;
+    const areaWidth = areaHeight * ratio;
+    const areaX = imgLeft + (imgW - areaWidth) / 2;
+    const areaY = imgTop + (imgH - areaHeight) / 2;
+
+    updateCropArea(
+        Math.max(imgLeft, Math.min(areaX, maxW - areaWidth)),
+        Math.max(imgTop, Math.min(areaY, maxH - areaHeight)),
+        Math.min(areaWidth, maxW - imgLeft),
+        Math.min(areaHeight, maxH - imgTop)
+    );
 }
 
 // ========== 添加到桌面功能 ==========

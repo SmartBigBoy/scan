@@ -1006,7 +1006,242 @@ html, body {
     color: #666;
 }
 
-/* 加载提示 */
+/* 滤镜和调整样式 */
+.filter-bar {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    padding: 10px 15px;
+    background: #fff;
+    border-bottom: 1px solid #eee;
+}
+
+.filter-btn {
+    padding: 8px 18px;
+    border: 2px solid #e0e0e0;
+    border-radius: 20px;
+    background: #fff;
+    font-size: 13px;
+    color: #666;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.filter-btn.active {
+    border-color: #4CAF50;
+    background: #e8f5e9;
+    color: #4CAF50;
+    font-weight: 600;
+}
+
+.adjust-bar {
+    padding: 10px 20px;
+    background: #fff;
+    border-bottom: 1px solid #eee;
+}
+
+.adjust-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 0;
+}
+
+.adjust-label {
+    font-size: 13px;
+    color: #666;
+    width: 50px;
+    flex-shrink: 0;
+}
+
+.adjust-slider {
+    flex: 1;
+    height: 4px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: #e0e0e0;
+    border-radius: 2px;
+    outline: none;
+}
+
+.adjust-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #4CAF50;
+    cursor: pointer;
+    border: 2px solid #fff;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+}
+
+.adjust-value {
+    font-size: 13px;
+    color: #999;
+    width: 30px;
+    text-align: right;
+    flex-shrink: 0;
+}
+
+/* 下载栏样式 */
+.download-bar {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    padding: 10px 15px;
+    background: #fff;
+    border-top: 1px solid #eee;
+}
+
+.download-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 10px 22px;
+    border: 2px solid #e0e0e0;
+    border-radius: 12px;
+    background: #fff;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.download-btn:active {
+    border-color: #4CAF50;
+    background: #e8f5e9;
+}
+
+.download-icon {
+    font-size: 22px;
+}
+
+.download-text {
+    font-size: 12px;
+    color: #666;
+    font-weight: 500;
+}
+
+/* 页面设置样式 */
+.page-settings {
+    padding: 12px 20px;
+    background: #f9f9f9;
+    border-bottom: 1px solid #eee;
+}
+
+.setting-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+}
+
+.setting-label {
+    font-size: 14px;
+    color: #333;
+}
+
+.setting-select {
+    padding: 6px 12px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 13px;
+    color: #333;
+    background: #fff;
+}
+
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 24px;
+}
+
+.switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.switch-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: #ccc;
+    border-radius: 24px;
+    transition: 0.3s;
+}
+
+.switch-slider::before {
+    content: '';
+    position: absolute;
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background: #fff;
+    border-radius: 50%;
+    transition: 0.3s;
+}
+
+.switch input:checked + .switch-slider {
+    background: #4CAF50;
+}
+
+.switch input:checked + .switch-slider::before {
+    transform: translateX(20px);
+}
+
+/* 缩略图删除按钮 */
+.document-item {
+    position: relative;
+}
+
+.doc-delete-btn {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(0,0,0,0.5);
+    color: #fff;
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.document-item.selected {
+    box-shadow: 0 0 0 3px #4CAF50;
+}
+
+/* 裁剪预设样式 */
+.crop-presets {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    padding: 10px 20px;
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
+    background: rgba(0, 0, 0, 0.9);
+}
+
+.preset-btn {
+    padding: 8px 18px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-radius: 20px;
+    background: transparent;
+    color: #fff;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.preset-btn:active {
+    border-color: #4CAF50;
+    background: rgba(76,175,80,0.3);
+}
 .loading {
     display: none;
     position: fixed;

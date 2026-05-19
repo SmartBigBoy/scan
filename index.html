@@ -106,15 +106,31 @@
         <div class="preview-content">
             <img id="previewImage" src="" alt="扫描预览">
         </div>
+
+        <div class="filter-bar" id="filterBar">
+            <button class="filter-btn active" data-filter="auto">自动</button>
+            <button class="filter-btn" data-filter="document">文档</button>
+            <button class="filter-btn" data-filter="idcard">证件</button>
+            <button class="filter-btn" data-filter="original">原色</button>
+        </div>
+
+        <div class="adjust-bar" id="adjustBar">
+            <div class="adjust-item">
+                <span class="adjust-label">亮度</span>
+                <input type="range" class="adjust-slider" id="brightnessSlider" min="-50" max="50" value="0">
+                <span class="adjust-value" id="brightnessValue">0</span>
+            </div>
+            <div class="adjust-item">
+                <span class="adjust-label">对比度</span>
+                <input type="range" class="adjust-slider" id="contrastSlider" min="-50" max="50" value="0">
+                <span class="adjust-value" id="contrastValue">0</span>
+            </div>
+        </div>
         
         <div class="preview-actions">
             <button class="action-btn" id="rotateBtn">
                 <span class="action-icon">↻</span>
                 <span class="action-text">旋转</span>
-            </button>
-            <button class="action-btn" id="enhanceBtn">
-                <span class="action-icon">✨</span>
-                <span class="action-text">增强</span>
             </button>
             <button class="action-btn" id="cropBtn">
                 <span class="action-icon">✂️</span>
@@ -132,20 +148,56 @@
         <div class="result-header">
             <button class="back-btn" id="resultBackBtn">← 返回</button>
             <h2 class="result-title">扫描完成</h2>
-            <button class="more-btn" id="moreBtn">⋮</button>
+            <button class="more-btn" id="moreBtn">设置</button>
         </div>
         
         <div class="result-content">
             <div class="document-list" id="documentList">
-                <!-- 文档缩略图列表 -->
             </div>
+        </div>
+
+        <div class="page-settings" id="pageSettings" style="display:none;">
+            <div class="setting-item">
+                <span class="setting-label">页面方向</span>
+                <select id="pageOrientation" class="setting-select">
+                    <option value="portrait">纵向</option>
+                    <option value="landscape">横向</option>
+                </select>
+            </div>
+            <div class="setting-item">
+                <span class="setting-label">显示页码</span>
+                <label class="switch">
+                    <input type="checkbox" id="pageNumberToggle" checked>
+                    <span class="switch-slider"></span>
+                </label>
+            </div>
+            <div class="setting-item">
+                <span class="setting-label">页边距</span>
+                <select id="pageMargin" class="setting-select">
+                    <option value="0">无</option>
+                    <option value="10" selected>小</option>
+                    <option value="20">中</option>
+                    <option value="30">大</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="download-bar">
+            <button class="download-btn" id="downloadPdfBtn">
+                <span class="download-icon">📄</span>
+                <span class="download-text">PDF</span>
+            </button>
+            <button class="download-btn" id="downloadPngBtn">
+                <span class="download-icon">�️</span>
+                <span class="download-text">PNG</span>
+            </button>
+            <button class="download-btn" id="downloadJpgBtn">
+                <span class="download-icon">📷</span>
+                <span class="download-text">JPG</span>
+            </button>
         </div>
         
         <div class="result-actions">
-            <button class="result-btn primary" id="savePdfBtn">
-                <span class="result-icon">📄</span>
-                <span class="result-text">保存PDF</span>
-            </button>
             <button class="result-btn secondary" id="shareBtn">
                 <span class="result-icon">📤</span>
                 <span class="result-text">分享</span>
@@ -225,12 +277,13 @@
             </button>
             <button class="crop-tool-btn" id="cropFlipHBtn">
                 <span class="crop-tool-icon">↔</span>
-                <span class="crop-tool-text">水平翻转</span>
+                <span class="crop-tool-text">翻转</span>
             </button>
-            <button class="crop-tool-btn" id="cropFlipVBtn">
-                <span class="crop-tool-icon">↕</span>
-                <span class="crop-tool-text">垂直翻转</span>
-            </button>
+        </div>
+        <div class="crop-presets">
+            <button class="preset-btn" data-preset="a4">A4</button>
+            <button class="preset-btn" data-preset="idcard">身份证</button>
+            <button class="preset-btn" data-preset="receipt">收据</button>
         </div>
     </div>
     
@@ -249,7 +302,9 @@
         </div>
     </div>
     
+    <script async src="https://docs.opencv.org/4.9.0/opencv.js" id="opencvScript" onload="onOpenCvReady()"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="opencv-scanner.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
