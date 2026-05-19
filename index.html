@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#4CAF50">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>智能扫描 - 文档扫描助手</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=PingFang+SC:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- 首页 -->
+    <div id="home" class="page active">
+        <div class="header">
+            <h1 class="title">智能扫描</h1>
+            <p class="subtitle">快速扫描，轻松分享</p>
+        </div>
+        
+        <div class="main-content">
+            <div class="scan-area" id="scanArea">
+                <div class="scan-frame">
+                    <div class="corner top-left"></div>
+                    <div class="corner top-right"></div>
+                    <div class="corner bottom-left"></div>
+                    <div class="corner bottom-right"></div>
+                    <div class="scan-line"></div>
+                </div>
+                <p class="scan-hint">点击下方按钮开始扫描</p>
+            </div>
+            
+            <div class="button-group">
+                <button class="btn-primary" id="scanBtn">
+                    <span class="btn-icon">📷</span>
+                    <span class="btn-text">扫描文稿</span>
+                </button>
+                <button class="btn-secondary" id="galleryBtn">
+                    <span class="btn-icon">📁</span>
+                    <span class="btn-text">从相册选择</span>
+                </button>
+            </div>
+            
+            <div class="features">
+                <div class="feature-item">
+                    <span class="feature-icon">✨</span>
+                    <span class="feature-text">智能识别</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-icon">📄</span>
+                    <span class="feature-text">PDF导出</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-icon">🔗</span>
+                    <span class="feature-text">便捷分享</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-icon">🔒</span>
+                    <span class="feature-text">隐私安全</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>本地处理，隐私无忧</p>
+        </div>
+    </div>
+    
+    <!-- 扫描页面 -->
+    <div id="scanner" class="page">
+        <div class="scanner-header">
+            <button class="back-btn" id="backBtn">← 返回</button>
+            <h2 class="scanner-title">扫描文档</h2>
+            <button class="flash-btn" id="flashBtn">⚡</button>
+        </div>
+        
+        <div class="video-container">
+            <video id="video" autoplay playsinline></video>
+            <canvas id="canvas" style="display: none;"></canvas>
+            <div class="scan-guides">
+                <div class="guide-corner tl"></div>
+                <div class="guide-corner tr"></div>
+                <div class="guide-corner bl"></div>
+                <div class="guide-corner br"></div>
+                <div class="guide-line"></div>
+            </div>
+        </div>
+        
+        <div class="scanner-actions">
+            <button class="capture-btn" id="captureBtn">
+                <span class="capture-ring"></span>
+                <span class="capture-dot"></span>
+            </button>
+            <p class="capture-hint">点击拍照</p>
+        </div>
+    </div>
+    
+    <!-- 预览页面 -->
+    <div id="preview" class="page">
+        <div class="preview-header">
+            <button class="back-btn" id="previewBackBtn">← 返回</button>
+            <h2 class="preview-title">预览</h2>
+            <button class="confirm-btn" id="confirmBtn">确定</button>
+        </div>
+        
+        <div class="preview-content">
+            <img id="previewImage" src="" alt="扫描预览">
+        </div>
+        
+        <div class="preview-actions">
+            <button class="action-btn" id="rotateBtn">
+                <span class="action-icon">↻</span>
+                <span class="action-text">旋转</span>
+            </button>
+            <button class="action-btn" id="enhanceBtn">
+                <span class="action-icon">✨</span>
+                <span class="action-text">增强</span>
+            </button>
+            <button class="action-btn" id="cropBtn">
+                <span class="action-icon">✂️</span>
+                <span class="action-text">裁剪</span>
+            </button>
+            <button class="action-btn" id="deleteBtn">
+                <span class="action-icon">🗑️</span>
+                <span class="action-text">删除</span>
+            </button>
+        </div>
+    </div>
+    
+    <!-- 结果页面 -->
+    <div id="result" class="page">
+        <div class="result-header">
+            <button class="back-btn" id="resultBackBtn">← 返回</button>
+            <h2 class="result-title">扫描完成</h2>
+            <button class="more-btn" id="moreBtn">⋮</button>
+        </div>
+        
+        <div class="result-content">
+            <div class="document-list" id="documentList">
+                <!-- 文档缩略图列表 -->
+            </div>
+        </div>
+        
+        <div class="result-actions">
+            <button class="result-btn primary" id="savePdfBtn">
+                <span class="result-icon">📄</span>
+                <span class="result-text">保存PDF</span>
+            </button>
+            <button class="result-btn secondary" id="shareBtn">
+                <span class="result-icon">📤</span>
+                <span class="result-text">分享</span>
+            </button>
+            <button class="result-btn secondary" id="continueBtn">
+                <span class="result-icon">➕</span>
+                <span class="result-text">继续扫描</span>
+            </button>
+        </div>
+    </div>
+    
+    <!-- 分享弹窗 -->
+    <div id="shareModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>分享文档</h3>
+                <button class="modal-close" id="shareClose">×</button>
+            </div>
+            <div class="share-options">
+                <button class="share-option" id="shareQQ">
+                    <span class="share-icon">🐧</span>
+                    <span class="share-text">QQ</span>
+                </button>
+                <button class="share-option" id="shareWechat">
+                    <span class="share-icon">💬</span>
+                    <span class="share-text">微信</span>
+                </button>
+                <button class="share-option" id="shareWeibo">
+                    <span class="share-icon">📱</span>
+                    <span class="share-text">微博</span>
+                </button>
+                <button class="share-option" id="shareOther">
+                    <span class="share-icon">⋯</span>
+                    <span class="share-text">更多</span>
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 加载提示 -->
+    <div id="loading" class="loading">
+        <div class="loading-spinner"></div>
+        <p>处理中...</p>
+    </div>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
