@@ -40,34 +40,49 @@ function detectCorners(srcMat) {
     let blurred = new cv.Mat();
     cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0);
     let edges = new cv.Mat();
-    cv.Canny(blurred, edges, 75, 200);
+    cv.Canny(blurred, edges, 50, 150);
     let kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(3, 3));
-    let dilated = new cv.Mat();
-    cv.dilate(edges, dilated, kernel);
+    let morphed = new cv.Mat();
+    cv.morphologyEx(edges, morphed, cv.MORPH_CLOSE, kernel);
 
     let contours = new cv.MatVector();
     let hierarchy = new cv.Mat();
-    cv.findContours(dilated, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+    cv.findContours(morphed, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
 
     let maxArea = 0;
     let docPoints = null;
+    const minArea = cols * rows * 0.03;
     for (let i = 0; i < contours.size(); i++) {
         const cnt = contours.get(i);
         const area = cv.contourArea(cnt);
-        if (area < cols * rows * 0.05) continue;
+        if (area < minArea) continue;
         const peri = cv.arcLength(cnt, true);
         const approx = new cv.Mat();
         cv.approxPolyDP(cnt, approx, 0.02 * peri, true);
-        if (approx.rows === 4 && area > maxArea) {
-            maxArea = area;
-            if (docPoints) docPoints.delete();
-            docPoints = approx.clone();
+        if (approx.rows === 4) {
+            const testPts = approx.data32S;
+            const testCorners = [
+                { x: testPts[0], y: testPts[1] },
+                { x: testPts[2], y: testPts[3] },
+                { x: testPts[4], y: testPts[5] },
+                { x: testPts[6], y: testPts[7] }
+            ];
+            const ordered = orderPoints(testCorners);
+            const w = Math.max(distance(ordered[0], ordered[1]), distance(ordered[2], ordered[3]));
+            const h = Math.max(distance(ordered[0], ordered[3]), distance(ordered[1], ordered[2]));
+            const aspect = w / h;
+            if (aspect > 0.2 && aspect < 5 && area > maxArea) {
+                maxArea = area;
+                if (docPoints) docPoints.delete();
+                docPoints = approx.clone();
+            }
         }
         approx.delete();
     }
 
     let result = null;
-    if (docPoints && maxArea > cols * rows * 0.1) {
+    const minValidArea = cols * rows * 0.08;
+    if (docPoints && maxArea > minValidArea) {
         const pts = docPoints.data32S;
         result = orderPoints([
             { x: pts[0], y: pts[1] }, { x: pts[2], y: pts[3] },
@@ -77,7 +92,7 @@ function detectCorners(srcMat) {
     }
 
     gray.delete(); blurred.delete(); edges.delete();
-    kernel.delete(); dilated.delete(); contours.delete(); hierarchy.delete();
+    kernel.delete(); morphed.delete(); contours.delete(); hierarchy.delete();
     return result;
 }
 

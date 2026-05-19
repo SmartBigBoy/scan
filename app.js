@@ -16,7 +16,6 @@ let lockedCorners = null;
 let detectHistory = [];
 let detectStableCount = 0;
 let isDetecting = false;
-let detectFrameCount = 0;
 
 // 裁剪相关变量
 let crop4Corners = [];
@@ -61,6 +60,7 @@ const buttons = {
     addToHome: document.getElementById('addToHomeBtn'),
     addToHomeClose: document.getElementById('addToHomeClose'),
     moreBtn: document.getElementById('moreBtn'),
+    manualDetect: document.getElementById('manualDetectBtn'),
     downloadPdf: document.getElementById('downloadPdfBtn'),
     downloadPng: document.getElementById('downloadPngBtn'),
     downloadJpg: document.getElementById('downloadJpgBtn')
@@ -109,28 +109,69 @@ function startDetection() {
     lockedCorners = null;
     detectHistory = [];
     detectStableCount = 0;
-    const overlay = document.getElementById('detectOverlay');
-    const container = document.getElementById('videoContainer');
-    overlay.width = container.clientWidth;
-    overlay.height = container.clientHeight;
-    scheduleDetect();
+    if (!openCvReady) {
+        setDetectStatus('OpenCV 加载中...', false);
+        let retries = 0;
+        const waitCv = () => {
+            if (openCvReady) {
+                setDetectStatus('对准文档', false);
+                doStart();
+            } else if (retries++ < 100) {
+                setTimeout(waitCv, 200);
+            } else {
+                setDetectStatus('OpenCV 加载失败', false);
+            }
+        };
+        waitCv();
+        return;
+    }
+    doStart();
+}
+
+function doStart() {
+    setTimeout(() => {
+        if (video && video.readyState >= 2) {
+            const overlay = document.getElementById('detectOverlay');
+            const container = document.getElementById('videoContainer');
+            overlay.width = container.clientWidth;
+            overlay.height = container.clientHeight;
+            detectLoopId = requestAnimationFrame(runDetection);
+        } else {
+            detectLoopId = requestAnimationFrame(doStart);
+        }
+    }, 300);
 }
 
 function stopDetection() {
-    if (detectLoopId) { cancelAnimationFrame(detectLoopId); detectLoopId = null; }
+    if (detectLoopId) {
+        clearTimeout(detectLoopId);
+        cancelAnimationFrame(detectLoopId);
+        detectLoopId = null;
+    }
     isDetecting = false;
     clearOverlay();
 }
 
-function scheduleDetect() {
-    if (!video || !video.videoWidth) { detectLoopId = requestAnimationFrame(scheduleDetect); return; }
-    detectLoopId = requestAnimationFrame(() => runDetection());
-}
-
 function clearOverlay() {
     const overlay = document.getElementById('detectOverlay');
-    const ctx = overlay.getContext('2d');
-    ctx.clearRect(0, 0, overlay.width, overlay.height);
+    if (overlay) {
+        const ctx = overlay.getContext('2d');
+        ctx.clearRect(0, 0, overlay.width, overlay.height);
+    }
+}
+
+function manualDetect() {
+    if (!video || !video.videoWidth || !openCvReady) return;
+    stopDetection();
+    lockedCorners = null;
+    detectHistory = [];
+    detectStableCount = 0;
+    const overlay = document.getElementById('detectOverlay');
+    const container = document.getElementById('videoContainer');
+    overlay.width = container.clientWidth;
+    overlay.height = container.clientHeight;
+    detectStableCount = 10;
+    detectLoopId = requestAnimationFrame(runDetection);
 }
 
 function setDetectStatus(text, isLocked) {
@@ -140,46 +181,68 @@ function setDetectStatus(text, isLocked) {
     el.className = 'detect-status' + (isLocked ? ' locked' : '');
 }
 
+function getVideoDisplayRect() {
+    const container = document.getElementById('videoContainer');
+    const cw = container.clientWidth;
+    const ch = container.clientHeight;
+    if (!video || !video.videoWidth) return { x: 0, y: 0, width: cw, height: ch, scaleX: 1, scaleY: 1 };
+    const vw = video.videoWidth;
+    const vh = video.videoHeight;
+    const ca = cw / ch;
+    const va = vw / vh;
+    let dw, dh, dx, dy;
+    if (ca > va) {
+        dh = ch; dw = ch * va;
+        dx = (cw - dw) / 2; dy = 0;
+    } else {
+        dw = cw; dh = cw / va;
+        dx = 0; dy = (ch - dh) / 2;
+    }
+    return { x: dx, y: dy, width: dw, height: dh, scaleX: dw / vw, scaleY: dh / vh };
+}
+
 async function runDetection() {
     if (!video || !video.videoWidth || !openCvReady) {
-        detectLoopId = requestAnimationFrame(() => runDetection());
+        detectLoopId = requestAnimationFrame(runDetection);
         return;
     }
     if (isDetecting) {
-        detectLoopId = requestAnimationFrame(() => runDetection());
+        detectLoopId = requestAnimationFrame(runDetection);
         return;
     }
     isDetecting = true;
-    detectFrameCount++;
 
     const vw = video.videoWidth, vh = video.videoHeight;
     const overlay = document.getElementById('detectOverlay');
     const container = document.getElementById('videoContainer');
-
     const cw = container.clientWidth, ch = container.clientHeight;
+
     if (overlay.width !== cw || overlay.height !== ch) {
         overlay.width = cw; overlay.height = ch;
     }
 
+    const rect = getVideoDisplayRect();
     const snapCanvas = document.createElement('canvas');
     const shrink = 4;
     snapCanvas.width = vw / shrink;
     snapCanvas.height = vh / shrink;
     const snapCtx = snapCanvas.getContext('2d');
     snapCtx.drawImage(video, 0, 0, snapCanvas.width, snapCanvas.height);
+    const imageData = snapCtx.getImageData(0, 0, snapCanvas.width, snapCanvas.height);
+    snapCanvas.remove();
 
     try {
-        const src = cv.matFromImageData(snapCtx.getImageData(0, 0, snapCanvas.width, snapCanvas.height));
+        const src = cv.matFromImageData(imageData);
         const rawCorners = detectCorners(src);
         src.delete();
 
         if (rawCorners) {
-            const scaleX = cw / snapCanvas.width;
-            const scaleY = ch / snapCanvas.height;
-            const scaled = rawCorners.map(c => ({ x: c.x * scaleX, y: c.y * scaleY }));
-            const native = rawCorners.map(c => ({ x: c.x * shrink, y: c.y * shrink }));
+            const native = rawCorners.map(c => ({ x: Math.round(c.x * shrink), y: Math.round(c.y * shrink) }));
+            const displayCorners = native.map(c => ({
+                x: rect.x + Math.round(c.x * rect.scaleX),
+                y: rect.y + Math.round(c.y * rect.scaleY)
+            }));
 
-            let stable = false;
             detectHistory.push(native);
             if (detectHistory.length > 5) detectHistory.shift();
 
@@ -188,7 +251,7 @@ async function runDetection() {
                 const prev = detectHistory[detectHistory.length - 2];
                 let drift = 0;
                 for (let i = 0; i < 4; i++) drift += distance(last[i], prev[i]);
-                if (drift < 15) detectStableCount++;
+                if (drift < 20) detectStableCount++;
                 else detectStableCount = 0;
             }
 
@@ -199,7 +262,7 @@ async function runDetection() {
                 setDetectStatus('检测到文档', false);
             }
 
-            drawDetectOverlay(scaled, !!lockedCorners);
+            drawDetectOverlay(displayCorners, !!lockedCorners);
         } else {
             detectHistory = [];
             detectStableCount = 0;
@@ -212,10 +275,11 @@ async function runDetection() {
         console.warn('检测帧失败:', e);
     }
 
-    snapCanvas.remove();
     isDetecting = false;
-    const interval = lockedCorners ? 600 : 350;
-    detectLoopId = setTimeout(() => { detectLoopId = requestAnimationFrame(() => runDetection()); }, interval);
+    const interval = lockedCorners ? 500 : 200;
+    detectLoopId = setTimeout(() => {
+        detectLoopId = requestAnimationFrame(runDetection);
+    }, interval);
 }
 
 function drawDetectOverlay(corners, locked) {
@@ -673,6 +737,7 @@ function setupEventListeners() {
     buttons.rescanBtn.addEventListener('click', rescanCurrentPage);
     buttons.share.addEventListener('click', shareDocument);
     buttons.continue.addEventListener('click', continueScanning);
+    buttons.manualDetect.addEventListener('click', manualDetect);
     
     buttons.shareClose.addEventListener('click', () => showShareModal(false));
     buttons.shareQQ.addEventListener('click', () => copyToClipboardAndShare('qq'));
@@ -931,14 +996,14 @@ function fitCrop4() {
     let gray = new cv.Mat(), blurred = new cv.Mat(), edges = new cv.Mat();
     cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
     cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0);
-    cv.Canny(blurred, edges, 75, 200);
+    cv.Canny(blurred, edges, 50, 150);
     let kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(3, 3));
-    let dilated = new cv.Mat();
-    cv.dilate(edges, dilated, kernel);
+    let morphed = new cv.Mat();
+    cv.morphologyEx(edges, morphed, cv.MORPH_CLOSE, kernel);
 
     let contours = new cv.MatVector();
     let hierarchy = new cv.Mat();
-    cv.findContours(dilated, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+    cv.findContours(morphed, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
     let maxArea = 0, docPoints = null;
     const rows = src.rows, cols = src.cols;
     for (let i = 0; i < contours.size(); i++) {
@@ -968,7 +1033,7 @@ function fitCrop4() {
     }
 
     src.delete(); gray.delete(); blurred.delete(); edges.delete();
-    kernel.delete(); dilated.delete(); contours.delete(); hierarchy.delete();
+    kernel.delete(); morphed.delete(); contours.delete(); hierarchy.delete();
     outCanvas.remove();
 }
 
