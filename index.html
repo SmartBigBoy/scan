@@ -191,6 +191,64 @@
         <p>处理中...</p>
     </div>
     
+    <!-- 裁剪页面 -->
+    <div id="cropper" class="page">
+        <div class="cropper-header">
+            <button class="cropper-back-btn" id="cropperBackBtn">←</button>
+            <h2 class="cropper-title">裁剪</h2>
+            <button class="cropper-confirm-btn" id="cropperConfirmBtn">确定</button>
+        </div>
+        
+        <div class="cropper-container" id="cropperContainer">
+            <img id="cropperImage" class="cropper-image" src="" alt="裁剪图片">
+            <div class="crop-overlay" id="cropOverlay"></div>
+            <div class="crop-area" id="cropArea">
+                <div class="crop-handle tl"></div>
+                <div class="crop-handle tr"></div>
+                <div class="crop-handle bl"></div>
+                <div class="crop-handle br"></div>
+                <div class="crop-handle t"></div>
+                <div class="crop-handle b"></div>
+                <div class="crop-handle l"></div>
+                <div class="crop-handle r"></div>
+            </div>
+        </div>
+        
+        <div class="cropper-footer">
+            <button class="crop-tool-btn" id="cropResetBtn">
+                <span class="crop-tool-icon">↺</span>
+                <span class="crop-tool-text">重置</span>
+            </button>
+            <button class="crop-tool-btn" id="cropRotateBtn">
+                <span class="crop-tool-icon">↻</span>
+                <span class="crop-tool-text">旋转</span>
+            </button>
+            <button class="crop-tool-btn" id="cropFlipHBtn">
+                <span class="crop-tool-icon">↔</span>
+                <span class="crop-tool-text">水平翻转</span>
+            </button>
+            <button class="crop-tool-btn" id="cropFlipVBtn">
+                <span class="crop-tool-icon">↕</span>
+                <span class="crop-tool-text">垂直翻转</span>
+            </button>
+        </div>
+    </div>
+    
+    <!-- 添加到桌面按钮和弹窗 -->
+    <div class="add-to-home-screen" id="addToHomeBtn"></div>
+    <div class="add-to-home-modal" id="addToHomeModal">
+        <div class="add-to-home-content">
+            <h3>添加到桌面</h3>
+            <p>将智能扫描添加到手机桌面，方便快速访问</p>
+            <ol class="add-to-home-steps">
+                <li>点击浏览器右上角的菜单按钮</li>
+                <li>选择"添加到主屏幕"或"安装应用"</li>
+                <li>确认添加，图标将出现在桌面</li>
+            </ol>
+            <button class="add-to-home-close" id="addToHomeClose">知道了</button>
+        </div>
+    </div>
+    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="app.js"></script>
 </body>

@@ -236,23 +236,72 @@ html, body {
     z-index: 100;
 }
 
-.back-btn, .flash-btn {
+.back-btn {
+    width: 44px;
+    height: 44px;
+    border: none;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(10px);
+    color: #fff;
+    font-size: 18px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    transition: all 0.2s ease;
+    padding: 0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.back-btn:hover {
+    background: rgba(255, 255, 255, 0.25);
+}
+
+.back-btn:active {
+    transform: scale(0.95);
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.back-btn::before {
+    content: '';
+    width: 10px;
+    height: 10px;
+    border-left: 2px solid #fff;
+    border-bottom: 2px solid #fff;
+    transform: rotate(45deg) translateX(2px);
+    margin-right: 2px;
+}
+
+.flash-btn {
     width: 44px;
     height: 44px;
     border: none;
     border-radius: 50%;
     background: rgba(255, 255, 255, 0.25);
     color: #fff;
-    font-size: 20px;
+    font-size: 18px;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    transition: all 0.2s ease;
+}
+
+.flash-btn:hover {
+    background: rgba(255, 255, 255, 0.35);
 }
 
 .flash-btn.active {
     background: #4CAF50;
+}
+
+.flash-btn:active {
+    transform: scale(0.95);
 }
 
 .scanner-title {
@@ -574,8 +623,311 @@ html, body {
     transform: scale(0.98);
 }
 
-/* 弹窗样式 */
-.modal {
+/* 裁剪页面样式 */
+#cropper {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: #000;
+    z-index: 200;
+}
+
+#cropper.active {
+    display: flex;
+    flex-direction: column;
+}
+
+.cropper-header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(10px);
+    z-index: 210;
+}
+
+.cropper-back-btn {
+    width: 40px;
+    height: 40px;
+    border: none;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    touch-action: manipulation;
+}
+
+.cropper-title {
+    color: #fff;
+    font-size: 16px;
+    font-weight: 500;
+}
+
+.cropper-confirm-btn {
+    background: #4CAF50;
+    color: #fff;
+    border: none;
+    padding: 8px 20px;
+    border-radius: 20px;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.cropper-container {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    margin-top: 60px;
+    margin-bottom: 60px;
+}
+
+.cropper-image {
+    position: absolute;
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+
+.crop-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    pointer-events: none;
+}
+
+.crop-area {
+    position: absolute;
+    border: 2px solid #4CAF50;
+    background: transparent;
+    cursor: move;
+}
+
+.crop-handle {
+    position: absolute;
+    width: 24px;
+    height: 24px;
+    background: #4CAF50;
+    border-radius: 50%;
+    border: 3px solid #fff;
+    cursor: move;
+    z-index: 10;
+}
+
+.crop-handle.tl {
+    top: -12px;
+    left: -12px;
+    cursor: nwse-resize;
+}
+
+.crop-handle.tr {
+    top: -12px;
+    right: -12px;
+    cursor: nesw-resize;
+}
+
+.crop-handle.bl {
+    bottom: -12px;
+    left: -12px;
+    cursor: nesw-resize;
+}
+
+.crop-handle.br {
+    bottom: -12px;
+    right: -12px;
+    cursor: nwse-resize;
+}
+
+.crop-handle.t {
+    top: -12px;
+    left: 50%;
+    transform: translateX(-50%);
+    cursor: ns-resize;
+}
+
+.crop-handle.b {
+    bottom: -12px;
+    left: 50%;
+    transform: translateX(-50%);
+    cursor: ns-resize;
+}
+
+.crop-handle.l {
+    left: -12px;
+    top: 50%;
+    transform: translateY(-50%);
+    cursor: ew-resize;
+}
+
+.crop-handle.r {
+    right: -12px;
+    top: 50%;
+    transform: translateY(-50%);
+    cursor: ew-resize;
+}
+
+.cropper-footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: space-around;
+    padding: 15px 20px;
+    padding-bottom: max(15px, env(safe-area-inset-bottom));
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(10px);
+    z-index: 210;
+}
+
+.crop-tool-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 20px;
+    border: none;
+    background: transparent;
+    color: #fff;
+    cursor: pointer;
+}
+
+.crop-tool-icon {
+    font-size: 24px;
+}
+
+.crop-tool-text {
+    font-size: 12px;
+    opacity: 0.8;
+}
+
+/* 添加到桌面提示 */
+.add-to-home-screen {
+    position: fixed;
+    bottom: 100px;
+    right: 20px;
+    width: 56px;
+    height: 56px;
+    background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
+    cursor: pointer;
+    z-index: 100;
+    animation: bounce 2s infinite;
+}
+
+.add-to-home-screen.hidden {
+    display: none;
+}
+
+.add-to-home-screen::before {
+    content: '➕';
+    font-size: 24px;
+    color: #fff;
+}
+
+@keyframes bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+}
+
+.add-to-home-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 20px;
+}
+
+.add-to-home-modal.show {
+    display: flex;
+}
+
+.add-to-home-content {
+    background: #fff;
+    border-radius: 20px;
+    padding: 30px;
+    max-width: 320px;
+    width: 100%;
+    text-align: center;
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: scale(0.9); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+.add-to-home-content h3 {
+    font-size: 18px;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 15px;
+}
+
+.add-to-home-content p {
+    font-size: 14px;
+    color: #666;
+    margin-bottom: 20px;
+    line-height: 1.6;
+}
+
+.add-to-home-steps {
+    text-align: left;
+    margin-bottom: 20px;
+}
+
+.add-to-home-steps li {
+    font-size: 14px;
+    color: #666;
+    margin-bottom: 10px;
+    padding-left: 20px;
+    position: relative;
+}
+
+.add-to-home-steps li::before {
+    content: '1.';
+    position: absolute;
+    left: 0;
+    color: #4CAF50;
+    font-weight: 600;
+}
+
+.add-to-home-steps li:nth-child(2)::before { content: '2.'; }
+.add-to-home-steps li:nth-child(3)::before { content: '3.'; }
+
+.add-to-home-close {
+    background: #f5f5f5;
+    color: #333;
+    border: none;
+    padding: 10px 30px;
+    border-radius: 25px;
+    font-size: 14px;
+    cursor: pointer;
+}
     display: none;
     position: fixed;
     top: 0;
