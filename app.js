@@ -1,12 +1,13 @@
 // 全局变量
 let video = null;
 let canvas = null;
-let currentImage = null;
-let originalImageData = null;
+let currentImage = null;          // 当前显示的图片
+let originalImageData = null;     // 原始拍摄/选择的图片
+let scanResultData = null;        // OpenCV透视校正后的彩色图 (未检测到时为null)
 let capturedImages = [];
 let flashEnabled = false;
 let rotation = 0;
-let currentFilter = 'auto';
+let currentFilter = 'original';
 let selectedPageIndex = -1;
 
 // 裁剪相关变量
@@ -130,78 +131,99 @@ async function initCamera() {
 // 拍照
 async function capturePhoto() {
     if (!video || !canvas) return;
-    
     showLoading(true);
-    
+
     const ctx = canvas.getContext('2d');
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const rawData = canvas.toDataURL('image/jpeg', 0.9);
-    
+    originalImageData = canvas.toDataURL('image/jpeg', 0.9);
+    scanResultData = null;
+
     try {
         if (openCvReady) {
-            originalImageData = await scanDocument(rawData);
-        } else {
-            originalImageData = rawData;
+            const warped = await warpDocument(originalImageData);
+            if (warped) scanResultData = warped;
         }
     } catch (e) {
-        console.warn('OpenCV扫描失败，使用原图:', e);
-        originalImageData = rawData;
+        console.warn('透视校正失败:', e);
     }
-    
-    currentImage = originalImageData;
-    elements.previewImage.src = currentImage;
-    elements.filterBar.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-    document.querySelector('.filter-btn[data-filter="original"]').classList.add('active');
+
+    applyFilter('original');
     showLoading(false);
     showPage('preview');
 }
 
+function getBaseImage() {
+    return scanResultData || originalImageData;
+}
+
 function applyFilter(type) {
-    if (!originalImageData) return;
+    if (!getBaseImage()) return;
     currentFilter = type;
-    
+
+    elements.filterBar.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    const activeBtn = elements.filterBar.querySelector(`.filter-btn[data-filter="${type}"]`);
+    if (activeBtn) activeBtn.classList.add('active');
+
     const img = new Image();
     img.onload = () => {
         const tempCanvas = document.createElement('canvas');
         tempCanvas.width = img.width;
         tempCanvas.height = img.height;
         const ctx = tempCanvas.getContext('2d');
-        ctx.drawImage(img, 0, 0);
-        const imageData = ctx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
-        const data = imageData.data;
 
-        if (type !== 'original') {
-            for (let i = 0; i < data.length; i += 4) {
-                const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
-                let r, g, b;
-                
-                if (type === 'auto') {
-                    const threshold = 160;
-                    const v = gray > threshold ? 255 : gray * 0.85;
-                    r = g = b = v;
-                } else if (type === 'document') {
-                    const threshold = 140;
-                    r = g = b = gray > threshold ? 255 : (gray < 80 ? 0 : gray);
-                } else if (type === 'idcard') {
-                    const factor = 1.15;
-                    r = Math.min(255, data[i] * factor);
-                    g = Math.min(255, data[i + 1] * factor);
-                    b = Math.min(255, data[i + 2] * factor);
-                }
-                
-                data[i] = r;
-                data[i + 1] = g;
-                data[i + 2] = b;
+        if (type === 'original') {
+            ctx.drawImage(img, 0, 0);
+        } else if (type === 'auto' || type === 'document') {
+            ctx.drawImage(img, 0, 0);
+            const imageData = ctx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+            const data = imageData.data;
+            const blockSize = type === 'document' ? 9 : 13;
+            const cVal = type === 'document' ? 3 : 5;
+
+            const w = tempCanvas.width, h = tempCanvas.height;
+            const gray = new Uint8Array(w * h);
+            for (let i = 0; i < w * h; i++) {
+                const idx = i * 4;
+                gray[i] = 0.299 * data[idx] + 0.587 * data[idx + 1] + 0.114 * data[idx + 2];
             }
+
+            const bin = new Uint8Array(w * h);
+            const half = Math.floor(blockSize / 2);
+            for (let y = 0; y < h; y++) {
+                for (let x = 0; x < w; x++) {
+                    let sum = 0, count = 0;
+                    for (let dy = -half; dy <= half; dy++) {
+                        for (let dx = -half; dx <= half; dx++) {
+                            const px = x + dx, py = y + dy;
+                            if (px >= 0 && px < w && py >= 0 && py < h) {
+                                sum += gray[py * w + px];
+                                count++;
+                            }
+                        }
+                    }
+                    const mean = sum / count;
+                    const idx = y * w + x;
+                    bin[idx] = (gray[idx] <= mean - cVal) ? 0 : 255;
+                }
+            }
+
+            for (let i = 0; i < w * h; i++) {
+                const idx = i * 4;
+                data[idx] = data[idx + 1] = data[idx + 2] = bin[i];
+            }
+            ctx.putImageData(imageData, 0, 0);
+        } else if (type === 'idcard') {
+            ctx.filter = 'brightness(1.1) contrast(1.15) saturate(1.2)';
+            ctx.drawImage(img, 0, 0);
+            ctx.filter = 'none';
         }
 
-        ctx.putImageData(imageData, 0, 0);
-        currentImage = tempCanvas.toDataURL('image/jpeg', 0.9);
+        currentImage = tempCanvas.toDataURL('image/jpeg', 0.92);
         elements.previewImage.src = currentImage;
-        rotation = 0;
+        elements.previewImage.style.transform = `rotate(${rotation}deg)`;
         applyAdjustments();
     };
-    img.src = originalImageData;
+    img.src = getBaseImage();
 }
 
 function applyAdjustments() {
@@ -427,31 +449,26 @@ function selectFromGallery() {
     
     input.onchange = async (e) => {
         const file = e.target.files[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = async (event) => {
-                showLoading(true);
-                const rawData = event.target.result;
-                try {
-                    if (openCvReady) {
-                        originalImageData = await scanDocument(rawData);
-                    } else {
-                        originalImageData = rawData;
-                    }
-                } catch (err) {
-                    console.warn('OpenCV扫描失败，使用原图:', err);
-                    originalImageData = rawData;
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+            showLoading(true);
+            originalImageData = event.target.result;
+            scanResultData = null;
+            try {
+                if (openCvReady) {
+                    const warped = await warpDocument(originalImageData);
+                    if (warped) scanResultData = warped;
                 }
-                resetAdjustments();
-                currentImage = originalImageData;
-                elements.previewImage.src = currentImage;
-                elements.filterBar.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-                document.querySelector('.filter-btn[data-filter="original"]').classList.add('active');
-                showLoading(false);
-                showPage('preview');
-            };
-            reader.readAsDataURL(file);
-        }
+            } catch (err) {
+                console.warn('透视校正失败:', err);
+            }
+            resetAdjustments();
+            applyFilter('original');
+            showLoading(false);
+            showPage('preview');
+        };
+        reader.readAsDataURL(file);
     };
     
     input.click();
@@ -483,9 +500,10 @@ function continueScanning() {
 // 返回首页并清空数据
 function goHome() {
     capturedImages = [];
+    scanResultData = null;
+    originalImageData = null;
     showPage('home');
     
-    // 停止摄像头
     if (video && video.srcObject) {
         video.srcObject.getTracks().forEach(track => track.stop());
         video = null;

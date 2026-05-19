@@ -10,9 +10,8 @@ function onOpenCvReady() {
 
 function waitForOpenCv() {
     return new Promise((resolve) => {
-        if (openCvReady) {
-            resolve();
-        } else {
+        if (openCvReady) resolve();
+        else {
             if (!window._openCvCallbacks) window._openCvCallbacks = [];
             window._openCvCallbacks.push(resolve);
         }
@@ -34,11 +33,11 @@ function distance(a, b) {
     return Math.round(Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2));
 }
 
-async function scanDocument(imageDataUrl) {
+async function warpDocument(imageDataUrl) {
     await waitForOpenCv();
 
     const img = new Image();
-    const dataUrl = await new Promise((resolve) => {
+    return await new Promise((resolve) => {
         img.onload = () => {
             const src = cv.imread(img);
             const rows = src.rows, cols = src.cols;
@@ -62,16 +61,13 @@ async function scanDocument(imageDataUrl) {
 
             let maxArea = 0;
             let docPoints = null;
-
             for (let i = 0; i < contours.size(); i++) {
                 const cnt = contours.get(i);
                 const area = cv.contourArea(cnt);
                 if (area < cols * rows * 0.05) continue;
-
                 const peri = cv.arcLength(cnt, true);
                 const approx = new cv.Mat();
                 cv.approxPolyDP(cnt, approx, 0.02 * peri, true);
-
                 if (approx.rows === 4 && area > maxArea) {
                     maxArea = area;
                     if (docPoints) docPoints.delete();
@@ -80,8 +76,7 @@ async function scanDocument(imageDataUrl) {
                 approx.delete();
             }
 
-            let warped = new cv.Mat();
-            let found = false;
+            let resultUrl = null;
 
             if (docPoints && maxArea > cols * rows * 0.1) {
                 const pts = docPoints.data32S;
@@ -92,50 +87,31 @@ async function scanDocument(imageDataUrl) {
                     { x: pts[6], y: pts[7] }
                 ];
                 const ordered = orderPoints(corners);
-
                 const w = Math.max(distance(ordered[0], ordered[1]), distance(ordered[2], ordered[3]));
                 const h = Math.max(distance(ordered[0], ordered[3]), distance(ordered[1], ordered[2]));
 
                 const srcPts = cv.matFromArray(4, 1, cv.CV_32FC2, [
-                    ordered[0].x, ordered[0].y,
-                    ordered[1].x, ordered[1].y,
-                    ordered[2].x, ordered[2].y,
-                    ordered[3].x, ordered[3].y
+                    ordered[0].x, ordered[0].y, ordered[1].x, ordered[1].y,
+                    ordered[2].x, ordered[2].y, ordered[3].x, ordered[3].y
                 ]);
                 const dstPts = cv.matFromArray(4, 1, cv.CV_32FC2, [
                     0, 0, w - 1, 0, w - 1, h - 1, 0, h - 1
                 ]);
-
                 const M = cv.getPerspectiveTransform(srcPts, dstPts);
+                let warped = new cv.Mat();
                 cv.warpPerspective(src, warped, M, new cv.Size(w, h));
                 srcPts.delete();
                 dstPts.delete();
                 M.delete();
-                found = true;
+
+                const outCanvas = document.createElement('canvas');
+                outCanvas.width = warped.cols;
+                outCanvas.height = warped.rows;
+                cv.imshow(outCanvas, warped);
+                resultUrl = outCanvas.toDataURL('image/jpeg', 0.92);
+                warped.delete();
+                outCanvas.remove();
             }
-
-            let result;
-            if (found) {
-                result = warped;
-            } else {
-                src.copyTo(result = warped);
-            }
-
-            let grayResult = new cv.Mat();
-            cv.cvtColor(result, grayResult, cv.COLOR_RGBA2GRAY);
-
-            let thresholded = new cv.Mat();
-            cv.adaptiveThreshold(grayResult, thresholded, 255,
-                cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 11, 2);
-
-            let output = new cv.Mat();
-            cv.cvtColor(thresholded, output, cv.COLOR_GRAY2RGBA);
-
-            const outCanvas = document.createElement('canvas');
-            outCanvas.width = output.cols;
-            outCanvas.height = output.rows;
-            cv.imshow(outCanvas, output);
-            const resultUrl = outCanvas.toDataURL('image/jpeg', 0.92);
 
             src.delete();
             gray.delete();
@@ -146,15 +122,9 @@ async function scanDocument(imageDataUrl) {
             contours.delete();
             hierarchy.delete();
             if (docPoints) docPoints.delete();
-            result.delete();
-            grayResult.delete();
-            thresholded.delete();
-            output.delete();
-            outCanvas.remove();
 
             resolve(resultUrl);
         };
         img.src = imageDataUrl;
     });
-    return dataUrl;
 }
