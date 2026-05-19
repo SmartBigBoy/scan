@@ -132,14 +132,13 @@ function warpWithCorners(src, orderedCorners) {
     ]);
     const M = cv.getPerspectiveTransform(srcPts, dstPts);
     let warped = new cv.Mat();
-    cv.warpPerspective(src, warped, M, new cv.Size(w, h));
-    srcPts.delete(); dstPts.delete(); M.delete();
+    cv.warpPerspective(src, warped, M, new cv.Size(w, h), cv.INTER_CUBIC);
 
     const outCanvas = document.createElement('canvas');
     outCanvas.width = warped.cols; outCanvas.height = warped.rows;
     cv.imshow(outCanvas, warped);
-    const url = outCanvas.toDataURL('image/jpeg', 0.92);
-    warped.delete(); outCanvas.remove();
+    const url = outCanvas.toDataURL('image/jpeg', 0.95);
+    warped.delete(); outCanvas.remove(); srcPts.delete(); dstPts.delete(); M.delete();
     return url;
 }
 

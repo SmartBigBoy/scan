@@ -16,6 +16,7 @@ let lockedCorners = null;
 let detectHistory = [];
 let detectStableCount = 0;
 let isDetecting = false;
+let autoCaptureTimer = null;
 
 // 裁剪相关变量
 let crop4Corners = [];
@@ -143,6 +144,7 @@ function doStart() {
 }
 
 function stopDetection() {
+    if (autoCaptureTimer) { clearTimeout(autoCaptureTimer); autoCaptureTimer = null; }
     if (detectLoopId) {
         clearTimeout(detectLoopId);
         cancelAnimationFrame(detectLoopId);
@@ -158,6 +160,17 @@ function clearOverlay() {
         const ctx = overlay.getContext('2d');
         ctx.clearRect(0, 0, overlay.width, overlay.height);
     }
+}
+
+function showFlashEffect() {
+    const overlay = document.getElementById('detectOverlay');
+    if (!overlay) return;
+    const ctx = overlay.getContext('2d');
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+    ctx.fillRect(0, 0, overlay.width, overlay.height);
+    setTimeout(() => {
+        ctx.clearRect(0, 0, overlay.width, overlay.height);
+    }, 150);
 }
 
 function manualDetect() {
@@ -258,6 +271,15 @@ async function runDetection() {
             if (detectStableCount >= 3 && !lockedCorners) {
                 lockedCorners = native;
                 setDetectStatus('已锁定 ✓', true);
+                if (!autoCaptureTimer) {
+                    autoCaptureTimer = setTimeout(() => {
+                        autoCaptureTimer = null;
+                        if (lockedCorners) {
+                            showFlashEffect();
+                            setTimeout(capturePhoto, 180);
+                        }
+                    }, 600);
+                }
             } else if (!lockedCorners) {
                 setDetectStatus('检测到文档', false);
             }
