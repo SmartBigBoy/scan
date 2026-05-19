@@ -11,14 +11,10 @@ let currentFilter = 'original';
 let selectedPageIndex = -1;
 
 // 裁剪相关变量
-let cropArea = null;
-let cropImage = null;
-let isDragging = false;
-let isResizing = false;
-let dragStart = { x: 0, y: 0 };
-let resizeHandle = null;
-let cropStartRect = { x: 0, y: 0, width: 0, height: 0 };
-let cropScale = 1;
+let crop4Corners = [];
+let crop4Img = null;
+let crop4DragIdx = -1;
+let crop4ImageRotation = 0;
 
 // DOM元素
 const pages = {
@@ -41,6 +37,7 @@ const buttons = {
     crop: document.getElementById('cropBtn'),
     deleteBtn: document.getElementById('deleteBtn'),
     resultBack: document.getElementById('resultBackBtn'),
+    rescanBtn: document.getElementById('rescanBtn'),
     share: document.getElementById('shareBtn'),
     continue: document.getElementById('continueBtn'),
     shareClose: document.getElementById('shareClose'),
@@ -50,9 +47,9 @@ const buttons = {
     shareOther: document.getElementById('shareOther'),
     cropperBack: document.getElementById('cropperBackBtn'),
     cropperConfirm: document.getElementById('cropperConfirmBtn'),
-    cropReset: document.getElementById('cropResetBtn'),
-    cropRotate: document.getElementById('cropRotateBtn'),
-    cropFlipH: document.getElementById('cropFlipHBtn'),
+    crop4Fit: document.getElementById('crop4FitBtn'),
+    crop4Reset: document.getElementById('crop4ResetBtn'),
+    crop4Rotate: document.getElementById('crop4RotateBtn'),
     addToHome: document.getElementById('addToHomeBtn'),
     addToHomeClose: document.getElementById('addToHomeClose'),
     moreBtn: document.getElementById('moreBtn'),
@@ -68,10 +65,6 @@ const elements = {
     loading: document.getElementById('loading'),
     video: document.getElementById('video'),
     canvas: document.getElementById('canvas'),
-    cropperImage: document.getElementById('cropperImage'),
-    cropperContainer: document.getElementById('cropperContainer'),
-    cropArea: document.getElementById('cropArea'),
-    cropOverlay: document.getElementById('cropOverlay'),
     addToHomeModal: document.getElementById('addToHomeModal'),
     filterBar: document.getElementById('filterBar'),
     adjustBar: document.getElementById('adjustBar'),
@@ -132,6 +125,7 @@ async function initCamera() {
 async function capturePhoto() {
     if (!video || !canvas) return;
     showLoading(true);
+    rotation = 0;
 
     const ctx = canvas.getContext('2d');
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -279,42 +273,19 @@ function confirmImage() {
         tempCtx.restore();
         
         const dataUrl = tempCanvas.toDataURL('image/jpeg', 0.9);
-        capturedImages.push(dataUrl);
+        
+        if (rescanMode && selectedPageIndex >= 0 && selectedPageIndex < capturedImages.length) {
+            capturedImages[selectedPageIndex] = dataUrl;
+            rescanMode = false;
+        } else {
+            capturedImages.push(dataUrl);
+        }
+        
         resetAdjustments();
         updateDocumentList();
         showPage('result');
     };
     img.src = currentImage;
-}
-
-function updateDocumentList() {
-    elements.documentList.innerHTML = '';
-    
-    capturedImages.forEach((image, index) => {
-        const item = document.createElement('div');
-        item.className = 'document-item' + (index === selectedPageIndex ? ' selected' : '');
-        item.innerHTML = `
-            <img src="${image}" alt="文档 ${index + 1}">
-            <span class="page-number">${index + 1}</span>
-            <button class="doc-delete-btn" data-index="${index}">×</button>
-        `;
-        item.addEventListener('click', (e) => {
-            if (e.target.classList.contains('doc-delete-btn')) return;
-            selectedPageIndex = index;
-            updateDocumentList();
-        });
-        elements.documentList.appendChild(item);
-    });
-
-    document.querySelectorAll('.doc-delete-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const idx = parseInt(btn.dataset.index);
-            capturedImages.splice(idx, 1);
-            if (selectedPageIndex >= capturedImages.length) selectedPageIndex = -1;
-            updateDocumentList();
-        });
-    });
 }
 
 function deleteCurrentImage() {
@@ -492,11 +463,6 @@ function toggleFlash() {
     buttons.flash.classList.toggle('active', flashEnabled);
 }
 
-// 继续扫描
-function continueScanning() {
-    showPage('scanner');
-}
-
 // 返回首页并清空数据
 function goHome() {
     capturedImages = [];
@@ -530,15 +496,16 @@ function setupEventListeners() {
     buttons.deleteBtn.addEventListener('click', deleteCurrentImage);
     
     buttons.cropperBack.addEventListener('click', closeCropper);
-    buttons.cropperConfirm.addEventListener('click', applyCrop);
-    buttons.cropReset.addEventListener('click', resetCrop);
-    buttons.cropRotate.addEventListener('click', rotateCropperImage);
-    buttons.cropFlipH.addEventListener('click', flipCropperImageH);
+    buttons.cropperConfirm.addEventListener('click', applyCrop4);
+    buttons.crop4Fit.addEventListener('click', fitCrop4);
+    buttons.crop4Reset.addEventListener('click', resetCrop4);
+    buttons.crop4Rotate.addEventListener('click', rotateCrop4);
     
     buttons.addToHome.addEventListener('click', showAddToHomeModal);
     buttons.addToHomeClose.addEventListener('click', hideAddToHomeModal);
     
     buttons.resultBack.addEventListener('click', goHome);
+    buttons.rescanBtn.addEventListener('click', rescanCurrentPage);
     buttons.share.addEventListener('click', shareDocument);
     buttons.continue.addEventListener('click', continueScanning);
     
@@ -574,13 +541,7 @@ function setupEventListeners() {
         });
     });
 
-    document.querySelectorAll('.preset-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            applySizePreset(btn.dataset.preset);
-        });
-    });
-
-    setupCropperEvents();
+    setupCrop4Events();
 }
 
 // 页面加载完成后初始化
@@ -619,256 +580,307 @@ document.addEventListener('touchmove', (e) => {
     }
 }, { passive: false });
 
-// ========== 裁剪功能实现 ==========
+// ========== 4角裁剪实现 ==========
 
-// 打开裁剪页面
 function openCropper() {
     if (!currentImage) return;
-    
     showPage('cropper');
-    elements.cropperImage.src = currentImage;
-    
-    // 等待图片加载后初始化裁剪区域
-    elements.cropperImage.onload = () => {
-        initCropArea();
-    };
-}
-
-// 初始化裁剪区域
-function initCropArea() {
-    const container = elements.cropperContainer;
-    const image = elements.cropperImage;
-    
-    // 计算图片缩放比例以适应容器
-    const containerWidth = container.clientWidth;
-    const containerHeight = container.clientHeight;
-    const imageWidth = image.naturalWidth;
-    const imageHeight = image.naturalHeight;
-    
-    const scaleX = containerWidth / imageWidth;
-    const scaleY = containerHeight / imageHeight;
-    cropScale = Math.min(scaleX, scaleY);
-    
-    // 设置图片样式
-    image.style.width = `${imageWidth * cropScale}px`;
-    image.style.height = `${imageHeight * cropScale}px`;
-    image.style.left = `${(containerWidth - imageWidth * cropScale) / 2}px`;
-    image.style.top = `${(containerHeight - imageHeight * cropScale) / 2}px`;
-    
-    // 设置初始裁剪区域（图片的80%大小，居中）
-    const cropWidth = imageWidth * cropScale * 0.8;
-    const cropHeight = imageHeight * cropScale * 0.8;
-    const cropX = (containerWidth - cropWidth) / 2;
-    const cropY = (containerHeight - cropHeight) / 2;
-    
-    updateCropArea(cropX, cropY, cropWidth, cropHeight);
-}
-
-// 更新裁剪区域
-function updateCropArea(x, y, width, height) {
-    const area = elements.cropArea;
-    area.style.left = `${x}px`;
-    area.style.top = `${y}px`;
-    area.style.width = `${width}px`;
-    area.style.height = `${height}px`;
-    
-    // 更新遮罩
-    updateOverlay(x, y, width, height);
-}
-
-// 更新遮罩
-function updateOverlay(x, y, width, height) {
-    const overlay = elements.cropOverlay;
-    overlay.style.clipPath = `polygon(0 0, ${x}px 0, ${x}px ${y}px, 0 ${y}px, 0 0, 
-        0 ${y + height}px, ${x}px ${y + height}px, ${x}px ${containerHeight}px, 0 ${containerHeight}px, 0 ${y + height}px,
-        ${x + width}px ${y + height}px, ${x + width}px ${containerHeight}px, ${containerWidth}px ${containerHeight}px, ${containerWidth}px ${y + height}px, ${x + width}px ${y + height}px,
-        ${x + width}px ${y}px, ${containerWidth}px ${y}px, ${containerWidth}px 0, ${x + width}px 0, ${x + width}px ${y}px,
-        ${x}px ${y}px)`;
-}
-
-// 设置裁剪区域事件
-function setupCropperEvents() {
-    const area = elements.cropArea;
-    const container = elements.cropperContainer;
-    
-    // 裁剪区域拖动
-    area.addEventListener('touchstart', (e) => {
-        isDragging = true;
-        dragStart = {
-            x: e.touches[0].clientX - parseFloat(area.style.left),
-            y: e.touches[0].clientY - parseFloat(area.style.top)
-        };
-        e.preventDefault();
-    });
-    
-    // 调整手柄拖动
-    const handles = area.querySelectorAll('.crop-handle');
-    handles.forEach(handle => {
-        handle.addEventListener('touchstart', (e) => {
-            isResizing = true;
-            resizeHandle = handle.classList;
-            cropStartRect = {
-                x: parseFloat(area.style.left),
-                y: parseFloat(area.style.top),
-                width: parseFloat(area.style.width),
-                height: parseFloat(area.style.height)
-            };
-            dragStart = {
-                x: e.touches[0].clientX,
-                y: e.touches[0].clientY
-            };
-            e.preventDefault();
-        });
-    });
-    
-    // 触摸移动
-    container.addEventListener('touchmove', (e) => {
-        if (!isDragging && !isResizing) return;
-        
-        const clientX = e.touches[0].clientX;
-        const clientY = e.touches[0].clientY;
-        const containerWidth = container.clientWidth;
-        const containerHeight = container.clientHeight;
-        
-        if (isDragging) {
-            let newX = clientX - dragStart.x;
-            let newY = clientY - dragStart.y;
-            
-            // 边界限制
-            newX = Math.max(0, Math.min(newX, containerWidth - parseFloat(area.style.width)));
-            newY = Math.max(0, Math.min(newY, containerHeight - parseFloat(area.style.height)));
-            
-            updateCropArea(newX, newY, parseFloat(area.style.width), parseFloat(area.style.height));
-        }
-        
-        if (isResizing) {
-            let newX = cropStartRect.x;
-            let newY = cropStartRect.y;
-            let newWidth = cropStartRect.width;
-            let newHeight = cropStartRect.height;
-            
-            const deltaX = clientX - dragStart.x;
-            const deltaY = clientY - dragStart.y;
-            const minSize = 50;
-            
-            if (resizeHandle.contains('l')) {
-                newX = Math.min(cropStartRect.x + deltaX, cropStartRect.x + cropStartRect.width - minSize);
-                newWidth = Math.max(minSize, cropStartRect.width - deltaX);
-                newX = Math.max(0, newX);
-            }
-            if (resizeHandle.contains('r')) {
-                newWidth = Math.max(minSize, cropStartRect.width + deltaX);
-                newWidth = Math.min(newWidth, containerWidth - cropStartRect.x);
-            }
-            if (resizeHandle.contains('t')) {
-                newY = Math.min(cropStartRect.y + deltaY, cropStartRect.y + cropStartRect.height - minSize);
-                newHeight = Math.max(minSize, cropStartRect.height - deltaY);
-                newY = Math.max(0, newY);
-            }
-            if (resizeHandle.contains('b')) {
-                newHeight = Math.max(minSize, cropStartRect.height + deltaY);
-                newHeight = Math.min(newHeight, containerHeight - cropStartRect.y);
-            }
-            
-            updateCropArea(newX, newY, newWidth, newHeight);
-        }
-        
-        e.preventDefault();
-    });
-    
-    // 触摸结束
-    container.addEventListener('touchend', () => {
-        isDragging = false;
-        isResizing = false;
-        resizeHandle = null;
-    });
-}
-
-// 应用裁剪
-function applyCrop() {
-    const area = elements.cropArea;
-    const image = elements.cropperImage;
-    
-    const cropX = parseFloat(area.style.left) - parseFloat(image.style.left);
-    const cropY = parseFloat(area.style.top) - parseFloat(image.style.top);
-    const cropWidth = parseFloat(area.style.width);
-    const cropHeight = parseFloat(area.style.height);
-    
-    // 创建canvas进行裁剪
-    const tempCanvas = document.createElement('canvas');
-    const tempCtx = tempCanvas.getContext('2d');
-    
-    // 转换为原始图片坐标
-    const originalX = cropX / cropScale;
-    const originalY = cropY / cropScale;
-    const originalWidth = cropWidth / cropScale;
-    const originalHeight = cropHeight / cropScale;
-    
-    tempCanvas.width = originalWidth;
-    tempCanvas.height = originalHeight;
-    
     const img = new Image();
+    crop4Img = img;
+    crop4ImageRotation = 0;
     img.onload = () => {
-        tempCtx.drawImage(img, originalX, originalY, originalWidth, originalHeight, 0, 0, originalWidth, originalHeight);
-        currentImage = tempCanvas.toDataURL('image/jpeg', 0.9);
-        elements.previewImage.src = currentImage;
-        showPage('preview');
+        const container = document.getElementById('crop4Container');
+        const canvas = document.getElementById('crop4Canvas');
+        canvas.width = container.clientWidth;
+        canvas.height = container.clientHeight;
+        const cw = canvas.width, ch = canvas.height;
+        const scale = Math.min(cw / img.naturalWidth, ch / img.naturalHeight);
+        const dw = img.naturalWidth * scale, dh = img.naturalHeight * scale;
+        const ox = (cw - dw) / 2, oy = (ch - dh) / 2;
+
+        crop4Corners = [
+            { x: ox, y: oy }, { x: ox + dw, y: oy },
+            { x: ox + dw, y: oy + dh }, { x: ox, y: oy + dh }
+        ];
+        drawCrop4();
     };
     img.src = currentImage;
 }
 
-// 关闭裁剪页面
-function closeCropper() {
+function drawCrop4() {
+    const canvas = document.getElementById('crop4Canvas');
+    const ctx = canvas.getContext('2d');
+    const w = canvas.width, h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+
+    if (!crop4Img) return;
+    const scale = Math.min(w / crop4Img.naturalWidth, h / crop4Img.naturalHeight);
+    const dw = crop4Img.naturalWidth * scale, dh = crop4Img.naturalHeight * scale;
+    const ox = (w - dw) / 2, oy = (h - dh) / 2;
+    ctx.save();
+    ctx.translate(w / 2, h / 2);
+    ctx.rotate(crop4ImageRotation * Math.PI / 180);
+    ctx.drawImage(crop4Img, -dw / 2, -dh / 2, dw, dh);
+    ctx.restore();
+
+    ctx.beginPath();
+    ctx.moveTo(crop4Corners[0].x, crop4Corners[0].y);
+    for (let i = 1; i < 4; i++) ctx.lineTo(crop4Corners[i].x, crop4Corners[i].y);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    ctx.fill('evenodd');
+    ctx.strokeStyle = '#4CAF50';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    for (let i = 0; i < 4; i++) {
+        const c = crop4Corners[i];
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, 10, 0, Math.PI * 2);
+        ctx.fillStyle = '#4CAF50';
+        ctx.fill();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+    }
+}
+
+function setupCrop4Events() {
+    const canvas = document.getElementById('crop4Canvas');
+
+    function getPos(e) {
+        const rect = canvas.getBoundingClientRect();
+        const t = e.touches ? e.touches[0] : e;
+        return { x: t.clientX - rect.left, y: t.clientY - rect.top };
+    }
+
+    function findCorner(pos) {
+        for (let i = 0; i < 4; i++) {
+            const dx = pos.x - crop4Corners[i].x, dy = pos.y - crop4Corners[i].y;
+            if (dx * dx + dy * dy < 400) return i;
+        }
+        return -1;
+    }
+
+    canvas.addEventListener('mousedown', (e) => {
+        const pos = getPos(e);
+        crop4DragIdx = findCorner(pos);
+    });
+    canvas.addEventListener('mousemove', (e) => {
+        if (crop4DragIdx < 0) return;
+        const pos = getPos(e);
+        crop4Corners[crop4DragIdx] = { x: Math.max(0, Math.min(canvas.width, pos.x)), y: Math.max(0, Math.min(canvas.height, pos.y)) };
+        drawCrop4();
+    });
+    canvas.addEventListener('mouseup', () => { crop4DragIdx = -1; });
+    canvas.addEventListener('mouseleave', () => { crop4DragIdx = -1; });
+
+    canvas.addEventListener('touchstart', (e) => {
+        const pos = getPos(e);
+        crop4DragIdx = findCorner(pos);
+    }, { passive: true });
+    canvas.addEventListener('touchmove', (e) => {
+        if (crop4DragIdx < 0) return;
+        e.preventDefault();
+        const pos = getPos(e);
+        crop4Corners[crop4DragIdx] = { x: Math.max(0, Math.min(canvas.width, pos.x)), y: Math.max(0, Math.min(canvas.height, pos.y)) };
+        drawCrop4();
+    }, { passive: false });
+    canvas.addEventListener('touchend', () => { crop4DragIdx = -1; });
+}
+
+function applyCrop4() {
+    if (crop4Corners.length !== 4 || !crop4Img) return;
+    const img = crop4Img;
+    const canvas = document.getElementById('crop4Canvas');
+    const w = canvas.width, h = canvas.height;
+    const scale = Math.min(w / img.naturalWidth, h / img.naturalHeight);
+    const dw = img.naturalWidth * scale, dh = img.naturalHeight * scale;
+    const ox = (w - dw) / 2, oy = (h - dh) / 2;
+
+    const corners = crop4Corners.map(c => ({
+        x: (c.x - ox) / scale, y: (c.y - oy) / scale
+    }));
+
+    const ordered = orderPoints(corners);
+    const ow = Math.max(distance(ordered[0], ordered[1]), distance(ordered[2], ordered[3]));
+    const oh = Math.max(distance(ordered[0], ordered[3]), distance(ordered[1], ordered[2]));
+
+    if (ow < 10 || oh < 10) { closeCropper(); return; }
+
+    if (openCvReady && typeof cv !== 'undefined') {
+        applyCrop4OpenCV(ordered, ow, oh);
+    } else {
+        alert('OpenCV 未就绪，请稍后重试');
+    }
+}
+
+function applyCrop4OpenCV(ordered, ow, oh) {
+    const outCanvas = document.createElement('canvas');
+    outCanvas.width = ow; outCanvas.height = oh;
+    const outCtx = outCanvas.getContext('2d');
+    outCtx.drawImage(crop4Img, 0, 0);
+
+    const src = cv.imread(outCanvas);
+    const srcPts = cv.matFromArray(4, 1, cv.CV_32FC2, [
+        ordered[0].x, ordered[0].y, ordered[1].x, ordered[1].y,
+        ordered[2].x, ordered[2].y, ordered[3].x, ordered[3].y
+    ]);
+    const dstPts = cv.matFromArray(4, 1, cv.CV_32FC2, [0, 0, ow - 1, 0, ow - 1, oh - 1, 0, oh - 1]);
+    const M = cv.getPerspectiveTransform(srcPts, dstPts);
+    let warped = new cv.Mat();
+    cv.warpPerspective(src, warped, M, new cv.Size(ow, oh));
+    srcPts.delete(); dstPts.delete(); M.delete(); src.delete();
+
+    const resultCanvas = document.createElement('canvas');
+    resultCanvas.width = warped.cols; resultCanvas.height = warped.rows;
+    cv.imshow(resultCanvas, warped);
+    warped.delete();
+
+    const dataUrl = resultCanvas.toDataURL('image/jpeg', 0.92);
+    resultCanvas.remove();
+
+    getBaseImageAfterCrop(dataUrl);
+}
+
+function getBaseImageAfterCrop(croppedUrl) {
+    if (scanResultData) scanResultData = croppedUrl;
+    else originalImageData = croppedUrl;
+    currentImage = croppedUrl;
+    elements.previewImage.src = currentImage;
     showPage('preview');
 }
 
-// 重置裁剪区域
-function resetCrop() {
-    initCropArea();
+function closeCropper() { showPage('preview'); }
+function resetCrop4() { if (crop4Img) openCropper(); }
+
+function fitCrop4() {
+    if (!openCvReady || !crop4Img) return;
+    const canvas = document.getElementById('crop4Canvas');
+    const outCanvas = document.createElement('canvas');
+    outCanvas.width = crop4Img.naturalWidth; outCanvas.height = crop4Img.naturalHeight;
+    const ctx = outCanvas.getContext('2d');
+    ctx.drawImage(crop4Img, 0, 0);
+
+    const src = cv.imread(outCanvas);
+    let gray = new cv.Mat(), blurred = new cv.Mat(), edges = new cv.Mat();
+    cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+    cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0);
+    cv.Canny(blurred, edges, 75, 200);
+    let kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(3, 3));
+    let dilated = new cv.Mat();
+    cv.dilate(edges, dilated, kernel);
+
+    let contours = new cv.MatVector();
+    let hierarchy = new cv.Mat();
+    cv.findContours(dilated, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+    let maxArea = 0, docPoints = null;
+    const rows = src.rows, cols = src.cols;
+    for (let i = 0; i < contours.size(); i++) {
+        const cnt = contours.get(i);
+        const area = cv.contourArea(cnt);
+        if (area < cols * rows * 0.05) continue;
+        const peri = cv.arcLength(cnt, true);
+        const approx = new cv.Mat();
+        cv.approxPolyDP(cnt, approx, 0.02 * peri, true);
+        if (approx.rows === 4 && area > maxArea) { maxArea = area; if (docPoints) docPoints.delete(); docPoints = approx.clone(); }
+        approx.delete();
+    }
+
+    if (docPoints && maxArea > cols * rows * 0.1) {
+        const pts = docPoints.data32S;
+        const raw = [{ x: pts[0], y: pts[1] }, { x: pts[2], y: pts[3] }, { x: pts[4], y: pts[5] }, { x: pts[6], y: pts[7] }];
+        const ordered = orderPoints(raw);
+        const w2 = canvas.width, h2 = canvas.height;
+        const scale = Math.min(w2 / cols, h2 / rows);
+        const ox2 = (w2 - cols * scale) / 2, oy2 = (h2 - rows * scale) / 2;
+
+        ordered.forEach((p, i) => {
+            crop4Corners[i] = { x: ox2 + p.x * scale, y: oy2 + p.y * scale };
+        });
+        drawCrop4();
+        docPoints.delete();
+    }
+
+    src.delete(); gray.delete(); blurred.delete(); edges.delete();
+    kernel.delete(); dilated.delete(); contours.delete(); hierarchy.delete();
+    outCanvas.remove();
 }
 
-// 旋转裁剪图片
-function rotateCropperImage() {
-    const image = elements.cropperImage;
-    const currentRotation = parseInt(image.dataset.rotation || '0');
-    const newRotation = (currentRotation + 90) % 360;
-    image.dataset.rotation = newRotation;
-    image.style.transform = `rotate(${newRotation}deg)`;
+function rotateCrop4() {
+    crop4ImageRotation = (crop4ImageRotation + 90) % 360;
+    drawCrop4();
 }
 
-function flipCropperImageH() {
-    const image = elements.cropperImage;
-    const currentScaleX = parseFloat(image.dataset.scaleX || '1');
-    image.dataset.scaleX = -currentScaleX;
-    image.style.transform = `scaleX(${image.dataset.scaleX})`;
+// ========== 缩略图拖拽排序 ==========
+
+function updateDocumentList() {
+    elements.documentList.innerHTML = '';
+    capturedImages.forEach((image, index) => {
+        const item = document.createElement('div');
+        item.className = 'document-item' + (index === selectedPageIndex ? ' selected' : '');
+        item.draggable = true;
+        item.dataset.index = index;
+        item.innerHTML = `
+            <img src="${image}" alt="文档 ${index + 1}">
+            <span class="page-number">${index + 1}</span>
+            <button class="doc-delete-btn" data-index="${index}">×</button>
+        `;
+        item.addEventListener('click', (e) => {
+            if (e.target.classList.contains('doc-delete-btn')) return;
+            selectedPageIndex = index;
+            updateDocumentList();
+        });
+        item.addEventListener('dragstart', (e) => {
+            e.dataTransfer.setData('text/plain', index);
+            item.classList.add('dragging');
+        });
+        item.addEventListener('dragend', () => { item.classList.remove('dragging'); });
+        item.addEventListener('dragover', (e) => { e.preventDefault(); });
+        item.addEventListener('drop', (e) => {
+            e.preventDefault();
+            const from = parseInt(e.dataTransfer.getData('text/plain'));
+            const to = index;
+            if (from !== to && from >= 0 && to >= 0) {
+                const [moved] = capturedImages.splice(from, 1);
+                capturedImages.splice(to, 0, moved);
+                selectedPageIndex = to;
+                updateDocumentList();
+            }
+        });
+        elements.documentList.appendChild(item);
+    });
+
+    document.querySelectorAll('.doc-delete-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const idx = parseInt(btn.dataset.index);
+            capturedImages.splice(idx, 1);
+            if (selectedPageIndex >= capturedImages.length) selectedPageIndex = -1;
+            updateDocumentList();
+        });
+    });
 }
 
-function applySizePreset(preset) {
-    const container = elements.cropperContainer;
-    const image = elements.cropperImage;
-    const imgW = parseFloat(image.style.width);
-    const imgH = parseFloat(image.style.height);
-    const imgLeft = parseFloat(image.style.left);
-    const imgTop = parseFloat(image.style.top);
-    const maxW = imgLeft + imgW;
-    const maxH = imgTop + imgH;
+// ========== 重新扫描 ==========
 
-    let ratio;
-    if (preset === 'a4') ratio = 210 / 297;
-    else if (preset === 'idcard') ratio = 85.6 / 54;
-    else if (preset === 'receipt') ratio = 80 / 200;
+async function rescanCurrentPage() {
+    if (selectedPageIndex < 0 || selectedPageIndex >= capturedImages.length) {
+        alert('请先选择要替换的页面');
+        return;
+    }
+    rescanMode = true;
+    showPage('scanner');
+    if (!video) initCamera();
+}
 
-    const areaHeight = imgH * 0.7;
-    const areaWidth = areaHeight * ratio;
-    const areaX = imgLeft + (imgW - areaWidth) / 2;
-    const areaY = imgTop + (imgH - areaHeight) / 2;
+// "继续扫描"添加时，如果是替换模式则替换选中页
+let rescanMode = false;
 
-    updateCropArea(
-        Math.max(imgLeft, Math.min(areaX, maxW - areaWidth)),
-        Math.max(imgTop, Math.min(areaY, maxH - areaHeight)),
-        Math.min(areaWidth, maxW - imgLeft),
-        Math.min(areaHeight, maxH - imgTop)
-    );
+function continueScanning() {
+    rescanMode = false;
+    showPage('scanner');
+    if (!video) initCamera();
 }
 
 // ========== 添加到桌面功能 ==========

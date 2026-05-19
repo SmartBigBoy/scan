@@ -623,7 +623,7 @@ html, body {
     transform: scale(0.98);
 }
 
-/* 裁剪页面样式 */
+/* 4角裁剪页面样式 */
 #cropper {
     display: none;
     position: fixed;
@@ -640,147 +640,25 @@ html, body {
     flex-direction: column;
 }
 
-.cropper-header {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 15px 20px;
-    background: rgba(0, 0, 0, 0.8);
-    backdrop-filter: blur(10px);
-    z-index: 210;
-}
-
-.cropper-back-btn {
-    width: 40px;
-    height: 40px;
-    border: none;
-    border-radius: 10px;
-    background: rgba(255, 255, 255, 0.15);
-    color: #fff;
-    font-size: 16px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    touch-action: manipulation;
-}
-
-.cropper-title {
-    color: #fff;
-    font-size: 16px;
-    font-weight: 500;
-}
-
-.cropper-confirm-btn {
-    background: #4CAF50;
-    color: #fff;
-    border: none;
-    padding: 8px 20px;
-    border-radius: 20px;
-    font-size: 14px;
-    cursor: pointer;
-}
-
-.cropper-container {
+.crop4-container {
     flex: 1;
     position: relative;
-    overflow: hidden;
     margin-top: 60px;
     margin-bottom: 60px;
 }
 
-.cropper-image {
-    position: absolute;
-    max-width: 100%;
-    max-height: 100%;
-    object-fit: contain;
+#crop4Canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+    cursor: grab;
 }
 
-.crop-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.6);
-    pointer-events: none;
+#crop4Canvas:active {
+    cursor: grabbing;
 }
 
-.crop-area {
-    position: absolute;
-    border: 2px solid #4CAF50;
-    background: transparent;
-    cursor: move;
-}
-
-.crop-handle {
-    position: absolute;
-    width: 24px;
-    height: 24px;
-    background: #4CAF50;
-    border-radius: 50%;
-    border: 3px solid #fff;
-    cursor: move;
-    z-index: 10;
-}
-
-.crop-handle.tl {
-    top: -12px;
-    left: -12px;
-    cursor: nwse-resize;
-}
-
-.crop-handle.tr {
-    top: -12px;
-    right: -12px;
-    cursor: nesw-resize;
-}
-
-.crop-handle.bl {
-    bottom: -12px;
-    left: -12px;
-    cursor: nesw-resize;
-}
-
-.crop-handle.br {
-    bottom: -12px;
-    right: -12px;
-    cursor: nwse-resize;
-}
-
-.crop-handle.t {
-    top: -12px;
-    left: 50%;
-    transform: translateX(-50%);
-    cursor: ns-resize;
-}
-
-.crop-handle.b {
-    bottom: -12px;
-    left: 50%;
-    transform: translateX(-50%);
-    cursor: ns-resize;
-}
-
-.crop-handle.l {
-    left: -12px;
-    top: 50%;
-    transform: translateY(-50%);
-    cursor: ew-resize;
-}
-
-.crop-handle.r {
-    right: -12px;
-    top: 50%;
-    transform: translateY(-50%);
-    cursor: ew-resize;
-}
-
-.cropper-footer {
+.cropper-footer4 {
     position: fixed;
     bottom: 0;
     left: 0;
@@ -789,30 +667,40 @@ html, body {
     justify-content: space-around;
     padding: 15px 20px;
     padding-bottom: max(15px, env(safe-area-inset-bottom));
-    background: rgba(0, 0, 0, 0.8);
+    background: rgba(0, 0, 0, 0.85);
     backdrop-filter: blur(10px);
     z-index: 210;
 }
 
-.crop-tool-btn {
+.crop4-tool-btn {
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 6px;
-    padding: 10px 20px;
+    padding: 12px 28px;
     border: none;
     background: transparent;
     color: #fff;
     cursor: pointer;
+    font-size: 13px;
 }
 
-.crop-tool-icon {
-    font-size: 24px;
+.crop4-tool-btn:active {
+    opacity: 0.6;
 }
 
-.crop-tool-text {
-    font-size: 12px;
-    opacity: 0.8;
+.crop4-icon {
+    font-size: 22px;
+}
+
+/* 缩略图拖拽样式 */
+.document-item.dragging {
+    opacity: 0.4;
+    border: 2px dashed #4CAF50;
+}
+
+.document-item[draggable="true"] {
+    cursor: grab;
 }
 
 /* 添加到桌面提示 */
@@ -1218,30 +1106,6 @@ html, body {
     box-shadow: 0 0 0 3px #4CAF50;
 }
 
-/* 裁剪预设样式 */
-.crop-presets {
-    display: flex;
-    justify-content: center;
-    gap: 10px;
-    padding: 10px 20px;
-    padding-bottom: max(10px, env(safe-area-inset-bottom));
-    background: rgba(0, 0, 0, 0.9);
-}
-
-.preset-btn {
-    padding: 8px 18px;
-    border: 2px solid rgba(255,255,255,0.3);
-    border-radius: 20px;
-    background: transparent;
-    color: #fff;
-    font-size: 13px;
-    cursor: pointer;
-}
-
-.preset-btn:active {
-    border-color: #4CAF50;
-    background: rgba(76,175,80,0.3);
-}
 .loading {
     display: none;
     position: fixed;

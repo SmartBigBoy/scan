@@ -198,6 +198,10 @@
         </div>
         
         <div class="result-actions">
+            <button class="result-btn secondary" id="rescanBtn">
+                <span class="result-icon">🔄</span>
+                <span class="result-text">重新扫描</span>
+            </button>
             <button class="result-btn secondary" id="shareBtn">
                 <span class="result-icon">📤</span>
                 <span class="result-text">分享</span>
@@ -248,42 +252,26 @@
         <div class="cropper-header">
             <button class="cropper-back-btn" id="cropperBackBtn">←</button>
             <h2 class="cropper-title">裁剪</h2>
-            <button class="cropper-confirm-btn" id="cropperConfirmBtn">确定</button>
+            <button class="cropper-confirm-btn" id="cropperConfirmBtn">应用</button>
         </div>
         
-        <div class="cropper-container" id="cropperContainer">
-            <img id="cropperImage" class="cropper-image" src="" alt="裁剪图片">
-            <div class="crop-overlay" id="cropOverlay"></div>
-            <div class="crop-area" id="cropArea">
-                <div class="crop-handle tl"></div>
-                <div class="crop-handle tr"></div>
-                <div class="crop-handle bl"></div>
-                <div class="crop-handle br"></div>
-                <div class="crop-handle t"></div>
-                <div class="crop-handle b"></div>
-                <div class="crop-handle l"></div>
-                <div class="crop-handle r"></div>
-            </div>
+        <div class="crop4-container" id="crop4Container">
+            <canvas id="crop4Canvas"></canvas>
         </div>
         
-        <div class="cropper-footer">
-            <button class="crop-tool-btn" id="cropResetBtn">
-                <span class="crop-tool-icon">↺</span>
-                <span class="crop-tool-text">重置</span>
+        <div class="cropper-footer4">
+            <button class="crop4-tool-btn" id="crop4FitBtn">
+                <span class="crop4-icon">⊞</span>
+                <span>适应</span>
             </button>
-            <button class="crop-tool-btn" id="cropRotateBtn">
-                <span class="crop-tool-icon">↻</span>
-                <span class="crop-tool-text">旋转</span>
+            <button class="crop4-tool-btn" id="crop4ResetBtn">
+                <span class="crop4-icon">↺</span>
+                <span>重置</span>
             </button>
-            <button class="crop-tool-btn" id="cropFlipHBtn">
-                <span class="crop-tool-icon">↔</span>
-                <span class="crop-tool-text">翻转</span>
+            <button class="crop4-tool-btn" id="crop4RotateBtn">
+                <span class="crop4-icon">↻</span>
+                <span>旋转</span>
             </button>
-        </div>
-        <div class="crop-presets">
-            <button class="preset-btn" data-preset="a4">A4</button>
-            <button class="preset-btn" data-preset="idcard">身份证</button>
-            <button class="preset-btn" data-preset="receipt">收据</button>
         </div>
     </div>
     
