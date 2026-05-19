@@ -130,7 +130,7 @@ function startDetection() {
 }
 
 function doStart() {
-    setTimeout(() => {
+    const timer = setTimeout(() => {
         if (video && video.readyState >= 2) {
             const overlay = document.getElementById('detectOverlay');
             const container = document.getElementById('videoContainer');
@@ -138,9 +138,10 @@ function doStart() {
             overlay.height = container.clientHeight;
             detectLoopId = requestAnimationFrame(runDetection);
         } else {
-            detectLoopId = requestAnimationFrame(doStart);
+            doStart();
         }
     }, 300);
+    detectLoopId = timer;
 }
 
 function stopDetection() {
@@ -349,14 +350,12 @@ async function initCamera() {
         
         video = elements.video;
         canvas = elements.canvas;
-        video.srcObject = stream;
-        
-        // 设置canvas尺寸
         video.onloadedmetadata = () => {
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
             startDetection();
         };
+        video.srcObject = stream;
     } catch (err) {
         console.error('无法访问摄像头:', err);
         alert('无法访问摄像头，请检查权限设置');
@@ -539,7 +538,9 @@ function confirmImage() {
 }
 
 function deleteCurrentImage() {
+    stopDetection();
     showPage('scanner');
+    if (video) startDetection();
 }
 
 async function generatePDF() {
