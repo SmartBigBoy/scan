@@ -134,11 +134,14 @@ function warpWithCorners(src, orderedCorners) {
     let warped = new cv.Mat();
     cv.warpPerspective(src, warped, M, new cv.Size(w, h), cv.INTER_CUBIC);
 
+    const sharpened = sharpenMat(warped);
+    warped.delete();
+
     const outCanvas = document.createElement('canvas');
-    outCanvas.width = warped.cols; outCanvas.height = warped.rows;
-    cv.imshow(outCanvas, warped);
+    outCanvas.width = sharpened.cols; outCanvas.height = sharpened.rows;
+    cv.imshow(outCanvas, sharpened);
     const url = outCanvas.toDataURL('image/jpeg', 0.95);
-    warped.delete(); outCanvas.remove(); srcPts.delete(); dstPts.delete(); M.delete();
+    sharpened.delete(); outCanvas.remove(); srcPts.delete(); dstPts.delete(); M.delete();
     return url;
 }
 
@@ -154,4 +157,100 @@ async function warpWithDetectedCorners(imageDataUrl, corners) {
         };
         img.src = imageDataUrl;
     });
+}
+
+function sharpenMat(src) {
+    const blurred = new cv.Mat();
+    cv.GaussianBlur(src, blurred, new cv.Size(0, 0), 3);
+    const dst = new cv.Mat();
+    cv.addWeighted(src, 1.6, blurred, -0.6, 0, dst);
+    blurred.delete();
+    return dst;
+}
+
+async function enhanceWithOpenCV(imageDataUrl, mode) {
+    await waitForOpenCv();
+    const img = new Image();
+    return await new Promise((resolve) => {
+        img.onload = () => {
+            const src = cv.imread(img);
+            const result = applyOcvFilter(src, mode);
+            src.delete();
+            resolve(result);
+        };
+        img.src = imageDataUrl;
+    });
+}
+
+function applyOcvFilter(src, mode) {
+    const gray = new cv.Mat();
+    cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+
+    let result;
+
+    if (mode === 'original') {
+        const clahe = new cv.CLAHE(2.0, new cv.Size(8, 8));
+        const equalized = new cv.Mat();
+        clahe.apply(gray, equalized);
+        const color = new cv.Mat();
+        cv.cvtColor(equalized, color, cv.COLOR_GRAY2RGBA);
+        const sharp = sharpenMat(color);
+        const outCanvas = document.createElement('canvas');
+        outCanvas.width = sharp.cols; outCanvas.height = sharp.rows;
+        cv.imshow(outCanvas, sharp);
+        result = outCanvas.toDataURL('image/jpeg', 0.95);
+        outCanvas.remove();
+        equalized.delete(); color.delete(); sharp.delete(); clahe.delete();
+    } else if (mode === 'auto') {
+        const clahe = new cv.CLAHE(3.0, new cv.Size(8, 8));
+        const enhanced = new cv.Mat();
+        clahe.apply(gray, enhanced);
+        const denoised = new cv.Mat();
+        cv.medianBlur(enhanced, denoised, 3);
+        const binary = new cv.Mat();
+        cv.adaptiveThreshold(denoised, binary, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 41, 8);
+        const color = new cv.Mat();
+        cv.cvtColor(binary, color, cv.COLOR_GRAY2RGBA);
+        const outCanvas = document.createElement('canvas');
+        outCanvas.width = color.cols; outCanvas.height = color.rows;
+        cv.imshow(outCanvas, color);
+        result = outCanvas.toDataURL('image/jpeg', 0.95);
+        outCanvas.remove();
+        enhanced.delete(); denoised.delete(); binary.delete(); color.delete(); clahe.delete();
+    } else if (mode === 'document') {
+        const clahe = new cv.CLAHE(4.0, new cv.Size(6, 6));
+        const enhanced = new cv.Mat();
+        clahe.apply(gray, enhanced);
+        const denoised = new cv.Mat();
+        cv.GaussianBlur(enhanced, denoised, new cv.Size(3, 3), 0);
+        const binary = new cv.Mat();
+        cv.adaptiveThreshold(denoised, binary, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 31, 5);
+        const color = new cv.Mat();
+        cv.cvtColor(binary, color, cv.COLOR_GRAY2RGBA);
+        const outCanvas = document.createElement('canvas');
+        outCanvas.width = color.cols; outCanvas.height = color.rows;
+        cv.imshow(outCanvas, color);
+        result = outCanvas.toDataURL('image/jpeg', 0.95);
+        outCanvas.remove();
+        enhanced.delete(); denoised.delete(); binary.delete(); color.delete(); clahe.delete();
+    } else if (mode === 'idcard') {
+        const color = new cv.Mat();
+        cv.cvtColor(gray, color, cv.COLOR_GRAY2RGBA);
+        const sharp = sharpenMat(color);
+        const outCanvas = document.createElement('canvas');
+        outCanvas.width = sharp.cols; outCanvas.height = sharp.rows;
+        cv.imshow(outCanvas, sharp);
+        result = outCanvas.toDataURL('image/jpeg', 0.95);
+        outCanvas.remove();
+        color.delete(); sharp.delete();
+    } else {
+        const outCanvas = document.createElement('canvas');
+        outCanvas.width = src.cols; outCanvas.height = src.rows;
+        cv.imshow(outCanvas, src);
+        result = outCanvas.toDataURL('image/jpeg', 0.95);
+        outCanvas.remove();
+    }
+
+    gray.delete();
+    return result;
 }

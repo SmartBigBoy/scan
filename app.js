@@ -413,6 +413,25 @@ function applyFilter(type) {
     const activeBtn = elements.filterBar.querySelector(`.filter-btn[data-filter="${type}"]`);
     if (activeBtn) activeBtn.classList.add('active');
 
+    const baseImg = getBaseImage();
+
+    if (openCvReady) {
+        enhanceWithOpenCV(baseImg, type).then(processed => {
+            if (processed) {
+                currentImage = processed;
+                elements.previewImage.src = currentImage;
+                elements.previewImage.style.transform = `rotate(${rotation}deg)`;
+                applyAdjustments();
+            }
+        }).catch(() => {
+            applyFilterFallback(type, baseImg);
+        });
+    } else {
+        applyFilterFallback(type, baseImg);
+    }
+}
+
+function applyFilterFallback(type, baseImg) {
     const img = new Image();
     img.onload = () => {
         const tempCanvas = document.createElement('canvas');
@@ -472,7 +491,7 @@ function applyFilter(type) {
         elements.previewImage.style.transform = `rotate(${rotation}deg)`;
         applyAdjustments();
     };
-    img.src = getBaseImage();
+    img.src = baseImg;
 }
 
 function applyAdjustments() {
