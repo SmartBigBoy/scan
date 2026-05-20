@@ -231,6 +231,12 @@ async function runDetection() {
     const container = document.getElementById('videoContainer');
     const cw = container.clientWidth, ch = container.clientHeight;
 
+    if (cw === 0 || ch === 0) {
+        isDetecting = false;
+        detectLoopId = requestAnimationFrame(runDetection);
+        return;
+    }
+
     if (overlay.width !== cw || overlay.height !== ch) {
         overlay.width = cw; overlay.height = ch;
     }
