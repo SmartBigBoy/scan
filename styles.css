@@ -429,6 +429,18 @@ html, body {
     flex-shrink: 0;
 }
 
+.preview-header .back-btn,
+.result-header .back-btn {
+    background: rgba(0, 0, 0, 0.06);
+    color: #333;
+    box-shadow: none;
+}
+
+.preview-header .back-btn:hover,
+.result-header .back-btn:hover {
+    background: rgba(0, 0, 0, 0.1);
+}
+
 .preview-title {
     font-size: 16px;
     font-weight: 500;
